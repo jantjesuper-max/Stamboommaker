@@ -45,7 +45,7 @@ Je hebt nodig:
 Dan:
 
 ```
-git clone https://github.com/<jouw-naam>/Stamboommaker.git mijn-stamboom
+git clone https://github.com/jantjesuper-max/Stamboommaker.git mijn-stamboom
 cd mijn-stamboom
 py instellen.py
 ```
