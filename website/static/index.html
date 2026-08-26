@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stamboom</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='5' fill='%232e5c46'/%3E%3Cg fill='none' stroke='%23f3eee2' stroke-width='1.7' stroke-linecap='round'%3E%3Ccircle cx='12' cy='8' r='4'/%3E%3Ccircle cx='7.5' cy='11.5' r='3'/%3E%3Ccircle cx='16.5' cy='11.5' r='3'/%3E%3Cpath d='M12 21v-9'/%3E%3C/g%3E%3C/svg%3E">
+<link rel="stylesheet" href="/stijl.css">
+</head>
+<body>
+<header id="kop">
+  <a class="kop-merk" href="#/boom" title="naar de stamboom">
+    <span class="kop-logo" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+        <circle cx="12" cy="8" r="4"/><circle cx="7.5" cy="11.5" r="3"/><circle cx="16.5" cy="11.5" r="3"/><path d="M12 21v-9"/>
+      </svg>
+    </span>
+    <span class="kop-tekst">
+      <strong id="merknaam">Stamboom</strong>
+      <em>dossiers, documenten en het boek</em>
+    </span>
+  </a>
+  <nav id="tabs">
+    <a href="#/boom" data-tab="boom">Stamboom</a>
+    <a href="#/personen" data-tab="personen">Personen</a>
+    <a href="#/tijdsbeeld" data-tab="tijdsbeeld">Tijdsbeeld</a>
+    <a href="#/verhalen" data-tab="verhalen">Verhalen</a>
+    <a href="#/verkenner" data-tab="verkenner">Verkenner</a>
+  </nav>
+  <div class="zoekdoos">
+    <svg class="zoek-ikoon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+      <circle cx="11" cy="11" r="7"/><path d="m20 20-4.2-4.2"/>
+    </svg>
+    <input id="zoek" type="search" placeholder="Zoek persoon, plaats of beroep" autocomplete="off"
+           aria-label="Zoek persoon, plaats of beroep">
+    <div id="zoeklijst" hidden></div>
+  </div>
+</header>
+
+<main id="inhoud">
+  <p class="laadtekst">Bezig met laden…</p>
+</main>
+
+<footer id="voet">
+  <span class="voet-kop">Legenda</span>
+  <span class="status s-ok">✓ bewezen</span>
+  <span class="status s-half">◐ waarschijnlijk</span>
+  <span class="status s-vraag">? hypothese</span>
+  <span class="status s-waak">⚠ verwarringsgevaar</span>
+  <span class="voet-rechts">De dossiers in <code>personen/</code> zijn de waarheid.</span>
+</footer>
+
+<script src="/app.js"></script>
+</body>
+</html>

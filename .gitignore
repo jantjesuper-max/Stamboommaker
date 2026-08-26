@@ -1,0 +1,33 @@
+# jouw persoonlijke instellingen — iedere kloon maakt zijn eigen versie met instellen.py
+stamboom.json
+
+# wegwerpbestanden (de map blijft bestaan, de inhoud is wegwerp)
+test/tijdelijk/*
+!test/tijdelijk/.gitkeep
+
+# bouwproducten — de hoofdstukken zijn de bron, het manuscript wordt gebouwd
+boek/manuscript.*
+
+# pdf-uitdraaien van dossiers/verhalen/tijdsbeeld — de markdown is de bron
+pdf/
+
+# gegenereerde indexen (bouwen met scripts/verhalen.py index en tijdsbeeld.py index)
+boek/verhalen-index.md
+tijdsbeeld/_INDEX.md
+
+# runtime-bestanden van Claude Code (geen projectinhoud)
+.claude/scheduled_tasks.lock
+.claude/*.lock
+.claude/settings.local.json
+
+# Python-bijproducten
+__pycache__/
+*.pyc
+
+# Windows-ruis
+Thumbs.db
+desktop.ini
+~$*
+
+# macOS-ruis
+.DS_Store

@@ -1,0 +1,22 @@
+{
+  "_uitleg": "Kopie hiervan heet stamboom.json en staat niet in git. Maak hem met 'py instellen.py', of kopieer dit bestand met de hand en vul het in.",
+
+  "eigenaar": {
+    "naam": "Voornaam Achternaam",
+    "geboortejaar": 1990,
+    "geboorteplaats": "Woonplaats"
+  },
+
+  "boek": {
+    "titel": "Waar wij vandaan komen",
+    "ondertitel": "De voorouders van Voornaam Achternaam",
+    "voor_wie": "voor mijn kinderen"
+  },
+
+  "website": {
+    "titel": "Onze stamboom",
+    "poort": 8123
+  },
+
+  "lijnen": ["Achternaam vaderskant", "Achternaam moederskant"]
+}
