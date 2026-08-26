@@ -1,0 +1,24 @@
+# Standaard: git bepaalt zelf wat tekst is en normaliseert naar LF in de repo.
+* text=auto
+
+# Shell-scripts moeten LF houden, ook op Windows uitgecheckt: met CRLF weigert
+# de shebang op macOS en Linux te werken ("bad interpreter").
+*.sh text eol=lf
+
+# Windows-batchbestanden juist CRLF, anders struikelt cmd.exe erover.
+*.cmd text eol=crlf
+
+# Python, markdown en web: LF in de repo, zodat diffs op GitHub schoon blijven.
+*.py text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.js text eol=lf
+*.css text eol=lf
+*.html text eol=lf
+
+# Scans en uitdraaien zijn binair; nooit aan de regeleindes zitten.
+*.jpg binary
+*.jpeg binary
+*.png binary
+*.pdf binary
+*.jp2 binary
