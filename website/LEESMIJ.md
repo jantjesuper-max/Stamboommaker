@@ -2,7 +2,10 @@
 
 Een lokale website om de stamboom te bekijken en door alle mappen en
 md-bestanden van het project te bladeren. Draait volledig op je eigen
-computer; er gaat niets het internet op.
+computer; er gaat niets van het project het internet op. (Eén uitzondering
+de andere kant op: het **Kaart**-tabblad haalt zijn achtergrondkaart als
+plaatjes op bij OpenStreetMap/CARTO — zonder internet blijven de stippen
+en filters daar gewoon werken, alleen de achtergrond ontbreekt dan.)
 
 De naam boven de pagina komt uit `stamboom.json` (`website.titel`), net als
 de standaardpoort.
@@ -60,6 +63,17 @@ Let op:
   lijn, generatie en betrouwbaarheidsstatus en een omschakeling tussen
   kaartjes en een compacte tabel. Het zoekveld rechtsboven geeft vanaf elk
   tabblad directe suggesties (pijltjestoetsen + Enter werken).
+- **Kaart** — alle woonplaatsen uit de dossiers op een echte kaart van
+  Nederland. Elke stip is een plaats: hoe groter, hoe meer voorouders er
+  woonden, en de kleur (of taartverdeling) is de familielijn. Zweven over
+  een stip toont wie er woonden; klikken zet de lijst vast, met links naar
+  de dossiers. Filteren kan per familielijn (de gekleurde chips) en per
+  generatie; de afspeelknop loopt de generaties af van oud naar jong, en
+  bij één gekozen generatie tonen open rondjes waar de ouders woonden met
+  stromende verhuislijnen van ouderplaats naar kindplaats. Dieplink:
+  `#/kaart/8` opent meteen generatie 8. De coördinaten per plaatsnaam
+  staan in `website/static/plaatsen.json` — mist er een plaats, dan meldt
+  de kaart dat onderaan en voeg je hem daar toe.
 - **Tijdsbeeld** — de tijdlijn van rampen, oorlogen en epidemieën die de
   woonplaatsen van voorouders raakten, met per gebeurtenis een eigen pagina
   en de gekoppelde dossiers.
@@ -108,4 +122,8 @@ py scripts/pdf.py alles --bundel              personen + tijdsbeeld + verhalen
   (alleen deze computer); met `--netwerk` ook op het lokale netwerk.
   Serveert in beide gevallen geen bestanden buiten de projectmap.
 - `static/` — de webpagina zelf (`index.html`, `app.js`, `stijl.css`),
-  zonder externe afhankelijkheden, dus werkt ook zonder internet.
+  plus het lokaal meegeleverde [Leaflet](https://leafletjs.com)
+  (`leaflet.js`, `leaflet.css`, BSD-licentie) voor het kaart-tabblad en
+  `plaatsen.json` met de coördinaten per plaatsnaam. Er hoeft niets
+  geïnstalleerd te worden; alleen de kaartachtergrond (tegels van
+  OpenStreetMap/CARTO) vraagt internet.

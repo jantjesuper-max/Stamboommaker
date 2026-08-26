@@ -1124,6 +1124,235 @@ object.pdf { width: 100%; height: 78vh; border: 1px solid var(--rand); border-ra
 .zk-aanhef { font-size: .8rem; font-style: italic; color: var(--inkt-zacht); line-height: 1.5; margin: .3rem 0; }
 .zk-voet { display: flex; gap: .3rem; flex-wrap: wrap; margin-top: .45rem; }
 
+/* ---------------------------------------------------------------- kaart (woonplaatsen) */
+
+.kaartpaneel { max-width: 1200px; }
+
+.kaart-balk { margin-bottom: .35rem; }
+.k-chips { display: flex; gap: .35rem; flex-wrap: wrap; }
+.k-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: .45rem;
+  font-family: var(--sans);
+  font-size: .78rem;
+  border: 1px solid var(--rand);
+  border-radius: 999px;
+  background: var(--kaart);
+  color: var(--inkt-zacht);
+  padding: .3rem .8rem;
+  cursor: pointer;
+}
+.k-chip::before {
+  content: "";
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--kleur, var(--groen));
+  opacity: .3;
+}
+.k-chip span { font-size: .68rem; color: var(--inkt-vaag); }
+.k-chip:hover { border-color: var(--kleur, var(--groen)); }
+.k-chip.aan { border-color: var(--kleur, var(--groen)); color: var(--inkt); }
+.k-chip.aan::before { opacity: 1; }
+
+.k-genbalk {
+  display: flex;
+  align-items: center;
+  gap: .3rem;
+  flex-wrap: wrap;
+  font-family: var(--sans);
+  margin-bottom: .6rem;
+}
+.k-gen {
+  font-family: var(--sans);
+  font-size: .8rem;
+  border: 1px solid var(--rand);
+  background: var(--kaart);
+  color: var(--inkt-zacht);
+  border-radius: 8px;
+  padding: .3rem .6rem;
+  min-width: 2.1em;
+  cursor: pointer;
+}
+.k-gen:hover { border-color: var(--groen); color: var(--groen); }
+.k-gen.aan { background: var(--groen); border-color: var(--groen); color: #fff; font-weight: 600; }
+.k-genknoppen { display: flex; gap: .3rem; margin-left: .4rem; }
+.k-stapknop {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  font-family: var(--sans);
+  font-size: .8rem;
+  border: 1px solid var(--rand);
+  background: var(--kaart);
+  color: var(--inkt-zacht);
+  border-radius: 8px;
+  padding: .3rem .6rem;
+  cursor: pointer;
+}
+.k-stapknop:hover { border-color: var(--groen); color: var(--groen); }
+.k-stapknop.aan { background: var(--groen-licht); border-color: var(--groen); color: var(--groen-donker); }
+.k-genterm { font-size: .8rem; color: var(--inkt-zacht); margin-left: .5rem; }
+
+.kaart-vlak {
+  position: relative;
+  border: 1px solid var(--rand);
+  border-radius: 14px;
+  overflow: hidden;
+  height: calc(100vh - 380px);
+  min-height: 420px;
+  box-shadow: inset 0 1px 6px rgba(58, 47, 28, .06);
+}
+#kaartdoek { position: absolute; inset: 0; }
+.leaflet-container { font-family: var(--sans); background: #ece9dd; }
+
+/* de stip: taartdiagram per lijn, naam eronder zodra er ver genoeg is ingezoomd */
+.k-stipicoon svg { display: block; filter: drop-shadow(0 1px 2px rgba(58, 47, 28, .35)); }
+.k-stipicoon:hover svg { transform: scale(1.15); }
+.k-getal { font-family: var(--sans); font-size: 10px; font-weight: 700; fill: #fffdf6; }
+.k-label {
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  transform: translateX(-50%);
+  margin-top: 1px;
+  font: 600 11px var(--sans);
+  color: var(--inkt);
+  text-shadow: 0 0 3px #fff, 0 0 3px #fff, 0 0 4px #fff;
+  white-space: nowrap;
+  pointer-events: none;
+  display: none;
+}
+#kaartdoek.k-metlabels .k-label { display: block; }
+
+/* verhuislijn van ouder naar kind: de streepjes stromen in die richting */
+.k-boog { animation: k-stroom 1.3s linear infinite; }
+@keyframes k-stroom { to { stroke-dashoffset: -12; } }
+@media (prefers-reduced-motion: reduce) { .k-boog { animation: none; } }
+
+.kaart-zoom {
+  position: absolute;
+  top: .7rem;
+  right: .7rem;
+  display: flex;
+  gap: .25rem;
+  z-index: 1100;
+}
+.kaart-zoom button {
+  font-family: var(--sans);
+  font-size: .8rem;
+  border: 1px solid var(--rand);
+  background: var(--kaart);
+  color: var(--inkt);
+  border-radius: 8px;
+  padding: .3rem .6rem;
+  cursor: pointer;
+  box-shadow: var(--schaduw);
+}
+.kaart-zoom button:hover { border-color: var(--groen); color: var(--groen); }
+
+.kaart-melding {
+  position: absolute;
+  left: 50%;
+  bottom: .9rem;
+  transform: translateX(-50%);
+  background: var(--kaart);
+  border: 1px solid var(--rand);
+  border-radius: 10px;
+  padding: .4rem .9rem;
+  font-family: var(--sans);
+  font-size: .78rem;
+  color: var(--inkt-zacht);
+  z-index: 1100;
+  box-shadow: var(--schaduw);
+  max-width: 86%;
+  text-align: center;
+}
+.kaart-leeg { bottom: auto; top: 45%; }
+
+/* zweef- en kliklijst bij een stip */
+.leaflet-tooltip.k-tip {
+  max-width: 300px;
+  white-space: normal;
+  border: 1px solid var(--rand);
+  border-radius: 10px;
+  box-shadow: var(--schaduw-zwaar);
+  padding: .55rem .75rem .45rem;
+  font-family: var(--sans);
+  background: var(--kaart);
+  color: var(--inkt);
+}
+.k-tip-vast .leaflet-popup-content-wrapper {
+  border-radius: 12px;
+  border: 1px solid var(--rand);
+  background: var(--kaart);
+  color: var(--inkt);
+  box-shadow: var(--schaduw-zwaar);
+  font-family: var(--sans);
+}
+.k-tip-vast .leaflet-popup-content { margin: .7rem .95rem .55rem; }
+.kt-kop {
+  font-family: var(--serif);
+  font-weight: 600;
+  font-size: .98rem;
+  margin-bottom: .3rem;
+  display: flex;
+  gap: .6rem;
+  align-items: baseline;
+}
+.kt-n { font-family: var(--sans); font-size: .7rem; color: var(--inkt-vaag); font-weight: 400; white-space: nowrap; }
+.kt-lijn {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  font-size: .66rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--inkt-zacht);
+  margin: .45rem 0 .15rem;
+}
+.kt-bol { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+.kt-rij { display: flex; justify-content: space-between; gap: .7rem; font-size: .78rem; padding: .12rem 0; }
+.kt-rij a { color: var(--groen-donker); text-decoration: none; }
+.kt-rij a:hover { text-decoration: underline; }
+.kt-rij span { color: var(--inkt-vaag); font-size: .72rem; text-align: right; }
+.kt-voet {
+  margin-top: .45rem;
+  font-size: .68rem;
+  color: var(--inkt-vaag);
+  border-top: 1px solid var(--rand-zacht);
+  padding-top: .35rem;
+}
+
+.kaart-voet {
+  margin-top: .6rem;
+  font-family: var(--sans);
+  font-size: .8rem;
+  color: var(--inkt-zacht);
+  display: flex;
+  flex-direction: column;
+  gap: .25rem;
+}
+.k-voetregel a { color: var(--groen); }
+.k-spooklegenda {
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  border: 1.6px dashed var(--inkt-zacht);
+  vertical-align: -.15em;
+}
+.k-booglegenda {
+  display: inline-block;
+  width: 24px;
+  height: 0;
+  border-top: 2px dashed var(--groen);
+  vertical-align: .22em;
+  margin-left: .2rem;
+}
+
 /* ---------------------------------------------------------------- smal scherm */
 
 @media (max-width: 900px) {
@@ -1133,6 +1362,7 @@ object.pdf { width: 100%; height: 78vh; border: 1px solid var(--rand); border-ra
   .verkenner { grid-template-columns: 1fr; }
   .v-boom { position: static; max-height: 40vh; }
   .boom-vlak { height: calc(100vh - 330px); }
+  .kaart-vlak { height: 60vh; min-height: 340px; }
   .teller { margin-left: 0; width: 100%; }
   .v-hoofd { flex-direction: column; gap: .4rem; }
   .v-totaal { display: none; }

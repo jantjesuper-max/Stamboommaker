@@ -429,7 +429,8 @@ class StamboomHandler(BaseHTTPRequestHandler):
                 return self._stuur_pdf(m_pdf.group(1), m_pdf.group(2))
             if pad in ("/", "/index.html"):
                 self._stuur_statisch("index.html")
-            elif pad in ("/app.js", "/stijl.css"):
+            elif pad in ("/app.js", "/stijl.css", "/plaatsen.json",
+                         "/leaflet.js", "/leaflet.css"):
                 self._stuur_statisch(pad[1:])
             elif pad == "/api/personen":
                 self._stuur_json(personen_ophalen())
