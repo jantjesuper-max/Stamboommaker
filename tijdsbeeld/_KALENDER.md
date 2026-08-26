@@ -51,7 +51,7 @@ kleinere regio geeft scherpere kandidaten dan een hele provincie.
 | gelderland | arnhem, nijmegen, apeldoorn, ede, doetinchem, zutphen, harderwijk, tiel, culemborg, zevenaar, winterswijk, wageningen, barneveld, elburg, lochem, groenlo |
 | utrecht | utrecht, amersfoort, veenendaal, zeist, nieuwegein, woerden, montfoort, ijsselstein, rhenen, wijk bij duurstede, bunschoten, breukelen, maarssen |
 | noord-holland | amsterdam, haarlem, alkmaar, hoorn, enkhuizen, zaandam, hilversum, purmerend, den helder, edam, medemblik, andijk, wervershoof, texel, beverwijk, weesp, naarden, monnickendam |
-| zuid-holland | rotterdam, den haag, leiden, dordrecht, delft, gouda, alphen, koudekerk, oudshoorn, aarlanderveen, woubrugge, bodegraven, zwammerdam, hazerswoude, ter aar, katwijk, noordwijk, schiedam, vlaardingen, gorinchem, brielle, goeree, overflakkee |
+| zuid-holland | rotterdam, den haag, leiden, dordrecht, delft, gouda, alphen aan den rijn, schiedam, vlaardingen, gorinchem, katwijk, noordwijk, bodegraven, woerden, oud-beijerland, brielle, hellevoetsluis, sliedrecht, gorkum, goeree, overflakkee, voorne, hoeksche waard |
 | zeeland | middelburg, vlissingen, goes, terneuzen, hulst, zierikzee, tholen, sluis, oostburg, axel, kapelle, borsele, schouwen, walcheren, zuid-beveland, noord-beveland, hontenisse, kloosterzande |
 | noord-brabant | eindhoven, tilburg, breda, den bosch, s-hertogenbosch, helmond, roosendaal, bergen op zoom, oss, waalwijk, uden, veghel, boxtel, valkenswaard, cuijk |
 | limburg | maastricht, venlo, sittard, heerlen, roermond, weert, kerkrade, geleen, venray, gennep, echt, valkenburg |

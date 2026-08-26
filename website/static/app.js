@@ -718,7 +718,7 @@ function toonPersonen() {
 
    De coördinaten per plaatsnaam staan in website/static/plaatsen.json; een
    woonplaats in een dossier mag een periode tussen haakjes dragen
-   ("Eesterga (1843 - ca. 1865)") — die wordt eraf geknipt en in de lijst bij
+   ("Deventer (1843 - ca. 1865)") — die wordt eraf geknipt en in de lijst bij
    de stip getoond. Filters: familielijnen (chips) en generatie (knoppenbalk
    met afspeelfunctie). Bij één gekozen generatie tonen open rondjes waar de
    ouders van die generatie woonden en lopen er stromende verhuislijnen van
@@ -750,7 +750,7 @@ function kaartGens() {
     .map(p => +p.generatie))].sort((a, b) => b - a);
 }
 
-// "Eesterga (1843 - ca. 1865)" -> naam "Eesterga", periode "1843 - ca. 1865"
+// "Deventer (1843 - ca. 1865)" -> naam "Deventer", periode "1843 - ca. 1865"
 function woonplaatsDelen(w) {
   const m = /^(.*?)\s*\(([^)]*)\)\s*$/.exec(w);
   return m ? { naam: m[1].trim(), periode: m[2].trim() } : { naam: String(w).trim(), periode: "" };
