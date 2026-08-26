@@ -179,13 +179,40 @@ def test_verse_kloon_is_schoon():
            "_AFGEHANDELD.md levert geen afmeldingen uit zijn uitleg")
 
 
+# ---------------------------------------------------------------------------
+# Broncode blijft tekst
+#
+# app.js gebruikte een letterlijke NUL-byte als scheidingsteken in de
+# markdown-renderer. Git ziet een bestand met een NUL-byte als binair: geen
+# diff, geen code review, en gereedschap dat er zomaar iets van kan maken. De
+# JS-escape levert exact hetzelfde teken op, dus gebruik die. Deze test staat
+# er omdat de byte al een keer is teruggekomen bij een herschreven app.js.
+# ---------------------------------------------------------------------------
+
+def test_broncode_is_tekst():
+    tekstsoorten = {".py", ".js", ".css", ".html", ".json", ".md", ".cmd", ".sh"}
+    # leaflet.js e.d. komen van buiten; die beheren we niet
+    van_buiten = {"leaflet.js", "leaflet.css"}
+    for pad in sorted(WORTEL.rglob("*")):
+        if not pad.is_file() or pad.suffix.lower() not in tekstsoorten:
+            continue
+        if ".git" in pad.parts or "__pycache__" in pad.parts or pad.name in van_buiten:
+            continue
+        if b"\x00" in pad.read_bytes():
+            FOUTEN.append(
+                f"{pad.relative_to(WORTEL)}: bevat een letterlijke NUL-byte, waardoor git "
+                f"het bestand als binair behandelt. Gebruik de JS-escape in plaats van het teken."
+            )
+
+
 def main():
     try:
         sys.stdout.reconfigure(encoding="utf-8")
     except AttributeError:
         pass
     for test in (test_plaatsen, test_plaats_raakt, test_kalender, test_instellingen,
-                 test_uitleg_wordt_overgeslagen, test_verse_kloon_is_schoon):
+                 test_uitleg_wordt_overgeslagen, test_verse_kloon_is_schoon,
+                 test_broncode_is_tekst):
         test()
     if FOUTEN:
         print(f"{len(FOUTEN)} fout(en):")

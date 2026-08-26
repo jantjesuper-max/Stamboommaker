@@ -67,6 +67,14 @@ accenten en tekens als `·`, `—`, `✓` raken dubbel gecodeerd (Élke wordt Ã
 met `git checkout -- <bestand>`. Voor zoeken en vervangen over meerdere bestanden: een klein
 Python-script met expliciete `encoding='utf-8'`.
 
+### Geen letterlijke NUL-bytes in broncode
+Heb je in JavaScript een onzichtbaar scheidingsteken nodig (de markdown-renderer in
+`website/static/app.js` gebruikt er een), schrijf dan de **escape** en niet het teken zelf. Een
+letterlijke NUL-byte in een bestand maakt dat git het als **binair** behandelt: geen diff, geen
+code review, en gereedschap dat er zomaar iets van kan maken. De escape levert exact hetzelfde
+teken op. `py test/test_gereedschap.py` controleert dit, want de byte is al een keer teruggekomen
+bij een herschreven `app.js`.
+
 ### Geen emoji's
 Gebruik **nergens** emoji's: niet in dossiers, indexen, scripts, kalenders, verhalen of
 commits. De betrouwbaarheidscodes `✓ ◐ ? ⚠` zijn de enige toegestane symbolen.

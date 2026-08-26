@@ -1,5 +1,5 @@
 {
-  "_uitleg": "Coordinatengids voor het kaart-tabblad: per plaatsnaam [breedtegraad, lengtegraad] van het huidige dorp of de huidige stad. Dit is aardrijkskunde, geen genealogie: de stip zegt waar het dorp ligt, het dossier zegt wie er woonde. Woonplaatsen in dossiers mogen een periode tussen haakjes dragen ('Eesterga (1843 - ca. 1865)'); de kaart knipt die eraf. Ontbreekt een plaats, dan meldt de kaart dat onderaan - voeg de plaats hier toe (en een alias als de dossiers een oude of samengestelde naam gebruiken).",
+  "_uitleg": "Coordinatengids voor het kaart-tabblad: per plaatsnaam [breedtegraad, lengtegraad] van het huidige dorp of de huidige stad. Dit is aardrijkskunde, geen genealogie: de stip zegt waar het dorp ligt, het dossier zegt wie er woonde. Woonplaatsen in dossiers mogen een periode tussen haakjes dragen ('Deventer (1843 - ca. 1865)'); de kaart knipt die eraf. Ontbreekt een plaats, dan meldt de kaart dat onderaan - voeg de plaats hier toe (en een alias als de dossiers een oude of samengestelde naam gebruiken).",
 
   "_startset": "Hieronder staat een landelijke startset: de provinciehoofdsteden en een aantal bekende plaatsen, zodat de kaart meteen iets toont. Jouw voorouders woonden vrijwel zeker in dorpen die hier niet staan - dat is normaal en de bedoeling. Coordinaten vind je op de Wikipedia-pagina van het dorp of via openstreetmap.org (rechtermuisknop, 'toon adres'); vier decimalen is ruim genoeg. Zet ze hier neer met de spelling die je dossiers gebruiken.",
 
@@ -16,6 +16,9 @@
     "Breda": [51.586, 4.776],
     "Coevorden": [52.661, 6.744],
     "Delft": [52.012, 4.357],
+    "Den Bosch": [51.697, 5.304],
+    "Den Haag": [52.080, 4.310],
+    "Den Helder": [52.958, 4.760],
     "Deventer": [52.255, 6.161],
     "Dokkum": [53.325, 5.997],
     "Dordrecht": [51.813, 4.690],
@@ -33,9 +36,6 @@
     "Heerenveen": [52.959, 5.919],
     "Heerlen": [50.888, 5.979],
     "Helmond": [51.481, 5.661],
-    "Den Bosch": [51.697, 5.304],
-    "Den Haag": [52.080, 4.310],
-    "Den Helder": [52.958, 4.760],
     "Hoogeveen": [52.722, 6.476],
     "Hoorn": [52.643, 5.060],
     "Kampen": [52.555, 5.911],
@@ -69,13 +69,12 @@
     "Zwolle": [52.512, 6.093]
   },
 
-  "_uitleg_alias": "Een alias wijst een naam uit je dossiers naar een plaats hierboven. Nodig bij drie dingen: een oude of officiele spelling ('s-Gravenhage), een samengestelde naam zoals archieven die schrijven ('Oosterzee en Echten', 'Rotsterhaule of Rotstergaast'), en een buurtschap dat je bij het naburige dorp wil laten vallen ('Rijs onder Mirns'). Vul dit aan naarmate je dossiers groeien - de kaart noemt onderaan elke naam die hij niet kon plaatsen.",
+  "_uitleg_alias": "Een alias wijst een naam uit je dossiers naar een plaats hierboven. Nodig bij drie dingen: een oude of officiele spelling ('s-Gravenhage naar Den Haag), een samengestelde naam zoals archieven die schrijven (twee dorpen achter elkaar, of 'X of Y'), en een buurtschap dat je bij het naburige dorp wil laten vallen ('Z onder X'). Toevoegingen als ', gem. ...' en ' e.o.' haalt de kaart er zelf al af, dus daarvoor is geen alias nodig. Vul dit aan naarmate je dossiers groeien - de kaart noemt onderaan elke naam die hij niet kon plaatsen.",
 
   "alias": {
     "'s-Gravenhage": "Den Haag",
     "'s-Hertogenbosch": "Den Bosch",
     "Alphen": "Alphen aan den Rijn",
-    "Leeuwarden-Buitenwijk": "Leeuwarden",
     "onder de stad Sneek": "Sneek"
   }
 }
