@@ -27,6 +27,7 @@
     <a href="#/kaart" data-tab="kaart">Kaart</a>
     <a href="#/tijdsbeeld" data-tab="tijdsbeeld">Tijdsbeeld</a>
     <a href="#/verhalen" data-tab="verhalen">Verhalen</a>
+    <a href="#/cijfers" data-tab="cijfers">Cijfers</a>
     <a href="#/verkenner" data-tab="verkenner">Verkenner</a>
   </nav>
   <div class="zoekdoos">
@@ -37,11 +38,18 @@
            aria-label="Zoek persoon, plaats of beroep">
     <div id="zoeklijst" hidden></div>
   </div>
+  <div id="takbalk" hidden></div>
 </header>
 
 <main id="inhoud">
   <p class="laadtekst">Bezig met laden…</p>
 </main>
+
+<button id="naar-boven" type="button" data-boven="1" title="terug naar boven" aria-label="terug naar boven">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M12 20V5"/><path d="m6 11 6-6 6 6"/>
+  </svg>
+</button>
 
 <footer id="voet">
   <span class="voet-kop">Legenda</span>

@@ -1,4 +1,4 @@
-/* Jan zijn stamboom — opmaak.
+/* Stamboommaker — opmaak.
    Warm archiefthema: crème papier, donkergroene kop, serif voor namen en verhaal,
    schreefloos voor knoppen en etiketten. Geen emoji's; iconen zijn inline SVG. */
 
@@ -29,13 +29,27 @@
   --serif: "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
   --sans: "Segoe UI", system-ui, -apple-system, sans-serif;
   --mono: Consolas, "Cascadia Mono", "Courier New", monospace;
+  /* de echte hoogte van de menubalk; app.js meet hem en werkt hem bij, want
+     hij wisselt met de schermbreedte (de tabbladen slaan om). Alles wat onder
+     de plakkende balk uit moet komen rekent hiermee. */
+  --kop-hoogte: 66px;
+  --kop-marge: calc(var(--kop-hoogte) + 26px);
 }
 
 * { box-sizing: border-box; }
 
-html, body { margin: 0; height: 100%; }
+/* GEEN height: 100% op body. Dat gaf het body-vak een hoogte van één
+   schermvulling, en position: sticky is begrensd door het vak van het element
+   waarin het staat — de menubalk plakte daardoor maar 830 pixels en scrolde
+   daarna gewoon weg. Bij een dossier van 17.000 pixels ben je dus 95% van de
+   pagina zonder menu, zoekveld en tabbladen. min-height doet wat hier nodig
+   is: de voettekst blijft onderaan bij een korte pagina, en het body-vak
+   groeit mee met een lange. Hetzelfde gold voor de bestandsboom in de
+   verkenner en voor de inhoudsopgave van een leespagina. */
+html { margin: 0; }
 
 body {
+  margin: 0;
   font-family: var(--serif);
   background: linear-gradient(180deg, #f5f0e4 0%, var(--papier) 240px);
   color: var(--inkt);
@@ -152,13 +166,14 @@ a { color: var(--groen); }
 }
 .zoek-item {
   display: flex;
-  flex-direction: column;
-  gap: .1rem;
+  align-items: center;
+  gap: .6rem;
   padding: .5rem .9rem;
   text-decoration: none;
   color: var(--inkt);
   border-bottom: 1px solid var(--rand-zacht);
 }
+.zi-tekst { display: flex; flex-direction: column; gap: .1rem; min-width: 0; }
 .zoek-item strong { font-family: var(--serif); font-size: .95rem; }
 .zoek-item span { font-size: .74rem; color: var(--inkt-zacht); }
 .zoek-item:hover, .zoek-item.actief { background: var(--groen-waas); }
@@ -173,11 +188,82 @@ a { color: var(--groen); }
 .zoek-alles:hover, .zoek-alles.actief { background: var(--groen-licht); }
 .zoek-leeg { display: block; padding: .6rem .9rem; font-size: .82rem; color: var(--inkt-zacht); }
 
+/* takkenbalk: het grote filter — hele stamboom, vaderskant, moederskant of één
+   lijn — als tweede regel ín de plakkende kop, zodat hij op elk tabblad staat
+   en meegemeten wordt in --kop-hoogte */
+
+#takbalk {
+  flex-basis: 100%;
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  flex-wrap: wrap;
+  font-family: var(--sans);
+  padding-top: .45rem;
+  border-top: 1px solid rgba(240, 230, 207, .16);
+}
+.tak-etiket {
+  font-size: .72rem;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: rgba(240, 230, 207, .6);
+  margin-right: .2rem;
+}
+.tak-knop {
+  padding: .26rem .8rem;
+  border-radius: 999px;
+  text-decoration: none;
+  color: rgba(243, 238, 226, .88);
+  font-size: .82rem;
+  border: 1px solid rgba(240, 230, 207, .3);
+  transition: background .12s, color .12s, border-color .12s;
+}
+.tak-knop:hover { background: rgba(255, 253, 246, .12); }
+.tak-knop.aan {
+  background: var(--goud);
+  border-color: var(--goud);
+  color: var(--groen-nacht);
+  font-weight: 600;
+}
+#tak-lijn {
+  font: inherit;
+  font-size: .8rem;
+  padding: .24rem .5rem;
+  border-radius: 999px;
+  border: 1px solid rgba(240, 230, 207, .3);
+  background: rgba(255, 253, 246, .1);
+  color: var(--papier);
+}
+#tak-lijn option { color: var(--inkt); background: var(--kaart); }
+.tak-kopieer {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  padding: .26rem .8rem;
+  border-radius: 999px;
+  border: 1px solid rgba(240, 230, 207, .3);
+  background: transparent;
+  color: rgba(243, 238, 226, .88);
+  font: inherit;
+  font-size: .82rem;
+  cursor: pointer;
+  transition: background .12s;
+}
+.tak-kopieer:hover { background: rgba(255, 253, 246, .12); }
+.tak-stand {
+  font-size: .76rem;
+  color: rgba(240, 230, 207, .65);
+  margin-left: auto;
+}
+
 /* ---------------------------------------------------------------- hoofd */
 
 #inhoud { flex: 1; padding: 1.4rem clamp(.8rem, 2.5vw, 2rem); width: 100%; margin: 0 auto; }
 
 .paneel { max-width: 1020px; margin: 0 auto; }
+/* een leespagina (dossier, verhaal, gebeurtenis) heeft naast de tekst ook een
+   inhoudsopgave in de marge staan, en mag daarvoor wat breder zijn */
+.paneel.lees { max-width: 1100px; }
 .vol { max-width: 1600px; margin: 0 auto; }
 
 .laadtekst, .uitleg { color: var(--inkt-zacht); }
@@ -317,8 +403,13 @@ h2 { font-size: 1.5rem; margin: .2rem 0 .6rem; letter-spacing: .01em; }
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: .1em;
-  color: var(--inkt-vaag);
+  color: var(--inkt-zacht);
   white-space: nowrap;
+  background: var(--kaart);
+  border: 1px solid var(--rand-zacht);
+  border-radius: 12px;
+  padding: .28rem .75rem .32rem;
+  box-shadow: var(--schaduw);
 }
 .kolomkop small {
   display: block;
@@ -332,12 +423,11 @@ h2 { font-size: 1.5rem; margin: .2rem 0 .6rem; letter-spacing: .01em; }
 
 .bkaart {
   display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: .18rem;
+  align-items: center;
+  gap: .55rem;
   width: 200px;
   height: 62px;
-  padding: .4rem .7rem .4rem .8rem;
+  padding: .4rem .6rem .4rem .65rem;
   background: var(--kaart);
   border: 1px solid var(--rand);
   border-left-width: 4px;
@@ -345,9 +435,43 @@ h2 { font-size: 1.5rem; margin: .2rem 0 .6rem; letter-spacing: .01em; }
   text-decoration: none;
   color: var(--inkt);
   box-shadow: var(--schaduw);
-  transition: box-shadow .12s, border-color .12s;
+  transition: box-shadow .12s, border-color .12s, transform .12s;
 }
-a.bkaart:hover { border-color: var(--groen); box-shadow: var(--schaduw-zwaar); }
+a.bkaart:hover { border-color: var(--groen); box-shadow: var(--schaduw-zwaar); transform: translateY(-1px); }
+.bk-tekst {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: .18rem;
+  flex: 1;
+  min-width: 0;
+}
+
+/* het monogram: initialen op de kleur van de familielijn (--mk), overal
+   hetzelfde gezicht — in de boom, de lijsten, de zoeksuggesties en het dossier */
+.monogram {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--mk, var(--groen));
+  color: #fffdf6;
+  font-family: var(--serif);
+  font-weight: 600;
+  font-size: .74rem;
+  letter-spacing: .03em;
+  box-shadow: inset 0 -6px 12px rgba(20, 25, 18, .18), 0 1px 2px rgba(58, 47, 28, .25);
+  -webkit-user-select: none;
+  user-select: none;
+}
+.bk-mono { width: 30px; height: 30px; font-size: .7rem; }
+.zs-mono { width: 30px; height: 30px; font-size: .7rem; }
+.fk-mono { width: 32px; height: 32px; }
+.pt-mono { width: 30px; height: 30px; font-size: .7rem; align-self: flex-start; }
+.held-mono { width: 54px; height: 54px; font-size: 1.2rem; }
 .rand-ok { border-left-color: var(--ok); }
 .rand-half { border-left-color: var(--half); }
 .rand-vraag { border-left-color: var(--vraag); }
@@ -511,8 +635,8 @@ a.bkaart:hover { border-color: var(--groen); box-shadow: var(--schaduw-zwaar); }
   contain-intrinsic-size: 150px;
 }
 .p-tegel:hover { border-color: var(--groen); transform: translateY(-2px); box-shadow: var(--schaduw-zwaar); }
-.p-tegel-kop { display: flex; justify-content: space-between; align-items: baseline; gap: .5rem; margin-bottom: .4rem; }
-.p-tegel-kop strong { font-size: 1rem; line-height: 1.25; }
+.p-tegel-kop { display: flex; align-items: center; gap: .55rem; margin-bottom: .4rem; }
+.p-tegel-kop strong { font-size: 1rem; line-height: 1.25; flex: 1; }
 .p-regel { font-family: var(--sans); font-size: .78rem; color: var(--inkt-zacht); margin: .18rem 0; }
 .p-regel .gd { display: inline-block; width: 1em; color: var(--inkt-vaag); font-family: var(--serif); }
 .p-tegel-voet { margin-top: .6rem; display: flex; gap: .35rem; flex-wrap: wrap; }
@@ -562,25 +686,35 @@ a.bkaart:hover { border-color: var(--groen); box-shadow: var(--schaduw-zwaar); }
 
 ul.tijdlijn {
   list-style: none;
-  margin: 1.4rem 0 0;
-  padding: 0 0 0 1.1rem;
-  border-left: 2px solid var(--lijn);
+  margin: 1.6rem 0 0;
+  padding: 0 0 0 1.5rem;
+  border-left: 2px solid var(--goud-licht);
 }
-ul.tijdlijn > li { position: relative; margin-bottom: 1.5rem; }
+ul.tijdlijn > li { position: relative; margin-bottom: 1.7rem; }
 ul.tijdlijn > li::before {
   content: "";
   position: absolute;
-  left: calc(-1.1rem - 6px);
-  top: .35rem;
-  width: 10px;
-  height: 10px;
+  left: calc(-1.5rem - 8px);
+  top: .3rem;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
-  background: var(--goud);
-  border: 2px solid var(--kaart);
-  box-shadow: 0 0 0 1px var(--goud);
+  background: var(--kaart);
+  border: 3px solid var(--goud);
+  box-shadow: 0 0 0 3px var(--goud-licht);
+  transition: transform .15s;
 }
+ul.tijdlijn > li:hover::before { transform: scale(1.2); }
 .tb-jaar { font-family: var(--sans); font-size: .78rem; font-weight: 600; color: var(--goud); letter-spacing: .04em; }
-.tijdlijn .tb-jaar { font-size: .92rem; margin-bottom: .35rem; }
+.tijdlijn .tb-jaar {
+  display: inline-block;
+  font-size: .86rem;
+  color: var(--groen-nacht);
+  background: var(--goud-licht);
+  border-radius: 999px;
+  padding: .14rem .75rem;
+  margin-bottom: .35rem;
+}
 .tb-kaart {
   display: block;
   margin-top: .3rem;
@@ -593,7 +727,8 @@ ul.tijdlijn > li::before {
   box-shadow: var(--schaduw);
   transition: border-color .12s, box-shadow .12s;
 }
-.tb-kaart:hover { border-color: var(--groen); box-shadow: var(--schaduw-zwaar); }
+.tb-kaart:hover { border-color: var(--groen); box-shadow: var(--schaduw-zwaar); transform: translateY(-2px); }
+.tb-kaart { transition: border-color .12s, box-shadow .12s, transform .12s; }
 .tb-kop { display: flex; align-items: baseline; gap: .6rem; flex-wrap: wrap; }
 .tb-kop strong { font-size: 1.02rem; }
 .tb-meta { margin-top: .45rem; display: flex; gap: .35rem; flex-wrap: wrap; }
@@ -645,8 +780,10 @@ ul.tijdlijn > li::before {
   box-shadow: var(--schaduw);
   margin-bottom: 1rem;
 }
-.held-kop { display: flex; align-items: baseline; gap: .8rem; flex-wrap: wrap; }
+.held-kop { display: flex; align-items: center; gap: .8rem; flex-wrap: wrap; }
 .held-kop h2 { margin: 0; font-size: 1.7rem; }
+.held-jaren { font-family: var(--sans); font-size: .84rem; color: var(--inkt-zacht); letter-spacing: .02em; }
+.held-leeftijd { color: var(--goud); font-weight: 600; white-space: nowrap; }
 .held-feiten {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -664,6 +801,7 @@ ul.tijdlijn > li::before {
   color: var(--inkt-vaag);
   margin-bottom: .1rem;
 }
+.held-feiten abbr { text-decoration: none; border-bottom: 1px dotted var(--lijn); cursor: help; }
 .held-acties { display: flex; gap: .5rem; flex-wrap: wrap; margin-top: .9rem; }
 .held-voet { margin-top: .8rem; font-family: var(--sans); font-size: .74rem; color: var(--inkt-vaag); }
 
@@ -675,8 +813,8 @@ ul.tijdlijn > li::before {
 }
 .fkaart {
   display: flex;
-  flex-direction: column;
-  gap: .12rem;
+  align-items: center;
+  gap: .6rem;
   background: var(--kaart);
   border: 1px solid var(--rand);
   border-radius: 10px;
@@ -684,8 +822,10 @@ ul.tijdlijn > li::before {
   text-decoration: none;
   color: var(--inkt);
   box-shadow: var(--schaduw);
+  transition: border-color .12s, box-shadow .12s, transform .12s;
 }
-a.fkaart:hover { border-color: var(--groen); box-shadow: var(--schaduw-zwaar); }
+a.fkaart:hover { border-color: var(--groen); box-shadow: var(--schaduw-zwaar); transform: translateY(-1px); }
+.fk-tekst { display: flex; flex-direction: column; gap: .12rem; min-width: 0; }
 .fk-naam { font-weight: 600; font-size: .92rem; line-height: 1.25; }
 .fk-jaren { font-family: var(--sans); font-size: .72rem; color: var(--inkt-zacht); }
 .fkaart.spook { border-style: dashed; background: transparent; box-shadow: none; }
@@ -695,7 +835,19 @@ a.fkaart:hover { border-color: var(--groen); box-shadow: var(--schaduw-zwaar); }
 .wikilink:hover { background: var(--groen-licht); }
 .wikilink.ontbreekt { color: var(--inkt-zacht); border-bottom-style: dashed; cursor: help; }
 
-.relaties { display: flex; gap: .5rem 1.3rem; flex-wrap: wrap; padding-top: .6rem; border-top: 1px dashed var(--rand); }
+/* één etiket, dan de namen achter elkaar met puntscheiders */
+.relaties {
+  display: flex;
+  align-items: baseline;
+  gap: .2rem .7rem;
+  flex-wrap: wrap;
+  padding-top: .65rem;
+  margin-top: .3rem;
+  border-top: 1px dashed var(--rand);
+}
+.relaties .rol { flex: none; padding-top: .18rem; }
+.relatie-lijst { font-size: .92rem; line-height: 1.75; }
+.relatie-lijst .scheider { color: var(--inkt-vaag); margin: 0 .32rem; }
 .relatie { font-size: .92rem; }
 
 .info-kaart {
@@ -780,33 +932,233 @@ a.fkaart:hover { border-color: var(--groen); box-shadow: var(--schaduw-zwaar); }
 .archief-regel a { text-decoration: none; display: inline-flex; align-items: center; gap: .35rem; }
 .archief-regel a:hover { text-decoration: underline; }
 
+/* ------------------------------------------------- leeslaag: tekst + index
+   Een dossier is acht tot vijftien kopjes lang. De tekst houdt een leesbare
+   regelbreedte (ongeveer 68 tekens), de inhoudsopgave staat op een breed
+   scherm in de marge ernaast en op een smal scherm als strip erboven, en
+   tabellen mogen buiten de tekstkolom uitlopen omdat ze anders tot vier
+   woorden per regel worden samengeperst. */
+
+.leeslaag { display: grid; grid-template-columns: minmax(0, 1fr); gap: .2rem 2rem; }
+/* in stripstand loopt de index tot precies dezelfde rand als de tekst */
+.leeslaag > article.md, .leeslaag > .inhoudsopgave { max-width: 900px; }
+
+/* De index staat rechts, niet links: dan blijft de tekst uitgelijnd met de
+   kopkaart en de documentengalerij erboven, en vult de index de marge die
+   daarvoor leeg was. In de DOM staat hij vóór het artikel, zodat hij op een
+   smal scherm vanzelf de strip erboven wordt. */
+@media (min-width: 1120px) {
+  .leeslaag:not(.strip-alleen) {
+    grid-template-columns: minmax(0, 1fr) 190px;
+    align-items: start;
+  }
+  .leeslaag:not(.strip-alleen).geen-io { grid-template-columns: minmax(0, 1fr); }
+  .leeslaag:not(.strip-alleen) > article.md { grid-area: 1 / 1; }
+  .leeslaag:not(.strip-alleen) > .inhoudsopgave {
+    grid-area: 1 / 2;
+    position: sticky;
+    top: var(--kop-marge);
+    max-height: calc(100vh - var(--kop-marge) - 2rem);
+    overflow: auto;
+    margin-bottom: 0;
+  }
+}
+
+.inhoudsopgave {
+  font-family: var(--sans);
+  margin: 0 0 1.1rem;
+  padding: .7rem .85rem;
+  background: var(--kaart);
+  border: 1px solid var(--rand-zacht);
+  border-radius: 12px;
+  box-shadow: var(--schaduw);
+}
+.io-kop {
+  display: flex;
+  align-items: center;
+  gap: .35rem;
+  margin: 0 0 .5rem;
+  font-size: .62rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  color: var(--inkt-vaag);
+}
+.io-kop .ik { width: .9em; height: .9em; color: var(--goud); }
+.inhoudsopgave ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .1rem; }
+.io-link {
+  /* -webkit-box i.p.v. block: alleen zo werkt line-clamp, en een kopje kan een
+     halve zin zijn — drie regels is genoeg, de rest staat in het title-attribuut */
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  font-size: .8rem;
+  line-height: 1.32;
+  color: var(--inkt-zacht);
+  background: none;
+  border: 0;
+  border-left: 2px solid var(--rand-zacht);
+  padding: .26rem .1rem .26rem .55rem;
+  cursor: pointer;
+}
+.io-link:hover { color: var(--groen-donker); border-left-color: var(--goud); }
+.io-link.nu {
+  color: var(--groen-donker);
+  font-weight: 600;
+  border-left-color: var(--groen);
+  background: var(--groen-waas);
+  border-radius: 0 6px 6px 0;
+}
+
+/* smal scherm (en de verkenner): een schuivende strip boven de tekst */
+@media (max-width: 1119px) {
+  .inhoudsopgave { overflow-x: auto; }
+  .inhoudsopgave ol { flex-direction: row; gap: .3rem; }
+  .io-link {
+    -webkit-line-clamp: 1;
+    white-space: nowrap;
+    width: auto;
+    border-left: 0;
+    border-radius: 999px;
+    background: var(--papier-diep);
+    padding: .24rem .7rem;
+  }
+  .io-link.nu { border-radius: 999px; background: var(--groen-licht); }
+}
+.leeslaag.strip-alleen .inhoudsopgave { overflow-x: auto; }
+.leeslaag.strip-alleen .inhoudsopgave ol { flex-direction: row; gap: .3rem; }
+.leeslaag.strip-alleen .io-link {
+  -webkit-line-clamp: 1;
+  white-space: nowrap;
+  width: auto;
+  border-left: 0;
+  border-radius: 999px;
+  background: var(--papier-diep);
+  padding: .24rem .7rem;
+}
+.leeslaag.strip-alleen .io-link.nu { border-radius: 999px; background: var(--groen-licht); }
+
+#naar-boven {
+  position: fixed;
+  right: 1.1rem;
+  bottom: 4.4rem;
+  z-index: 35;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--rand);
+  border-radius: 50%;
+  background: var(--kaart);
+  color: var(--groen);
+  box-shadow: var(--schaduw-zwaar);
+  cursor: pointer;
+  opacity: 0;
+  visibility: hidden;
+  translate: 0 .6rem;
+  transition: opacity .18s, translate .18s, visibility .18s;
+}
+#naar-boven svg { width: 18px; height: 18px; }
+#naar-boven.zichtbaar { opacity: 1; visibility: visible; translate: 0 0; }
+#naar-boven:hover { background: var(--groen); color: var(--papier); border-color: var(--groen); }
+
 /* ---------------------------------------------------------------- markdown */
 
-article.md { line-height: 1.68; max-width: 76ch; }
-article.md h1 { font-size: 1.55rem; border-bottom: 2px solid var(--rand); padding-bottom: .3rem; }
+article.md {
+  line-height: 1.72;
+  font-size: 1.045rem;
+  text-wrap: pretty;
+}
+/* de leesmaat geldt voor de tekst; tabellen, codeblokken en lijnen niet */
+article.md > * { max-width: 72ch; }
+article.md > .tabelwikkel,
+article.md > pre.codeblok,
+article.md > hr,
+article.md > .voetnoten { max-width: none; }
+
+article.md h1, article.md h2, article.md h3, article.md h4,
+.voetnoten li, .vn-ref { scroll-margin-top: var(--kop-marge); }
+
+article.md h1 {
+  font-size: 1.72rem;
+  line-height: 1.22;
+  margin: 0 0 1.2rem;
+}
+article.md h1 .md-titel-hoofd { display: block; }
+article.md h1 .md-titel-onder {
+  display: block;
+  margin-top: .5rem;
+  padding-top: .5rem;
+  border-top: 2px solid var(--goud-licht);
+  font-size: .62em;
+  font-weight: normal;
+  font-style: italic;
+  line-height: 1.4;
+  color: var(--inkt-zacht);
+}
+/* de eerste alinea van een leespagina is de aanhef en mag iets zwaarder wegen */
+article.md > h1 + p { font-size: 1.05em; color: #35301f; }
+
 article.md h2 {
   font-size: 1.02rem;
-  margin-top: 2rem;
+  margin-top: 2.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--rand-zacht);
   color: var(--groen-donker);
   font-family: var(--sans);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: .08em;
 }
-article.md h3 { font-size: 1.05rem; margin-top: 1.4rem; }
+article.md > h1 + h2, article.md > h2:first-child { border-top: 0; padding-top: 0; margin-top: 1.4rem; }
+article.md h3 { font-size: 1.06rem; margin-top: 1.5rem; margin-bottom: .3rem; }
+
 article.md blockquote {
-  margin: 1rem 0;
-  padding: .6rem 1rem;
-  border-left: 4px solid var(--goud);
-  background: var(--goud-licht);
-  border-radius: 0 8px 8px 0;
+  margin: 1.3rem 0;
+  padding: .85rem 1.1rem .85rem 2.5rem;
+  border-left: 3px solid var(--goud);
+  background: linear-gradient(180deg, #f8f1de, var(--goud-licht));
+  border-radius: 0 10px 10px 0;
   font-style: italic;
+  position: relative;
 }
+article.md blockquote::before {
+  content: "\201C";
+  position: absolute;
+  left: .5rem;
+  top: .05rem;
+  font-size: 2.5rem;
+  line-height: 1;
+  color: var(--goud);
+  opacity: .5;
+  font-style: normal;
+}
+article.md blockquote p { margin: 0 0 .55rem; }
+article.md blockquote p:last-child { margin-bottom: 0; }
+
 article.md img { max-width: 100%; border-radius: 8px; box-shadow: var(--schaduw); }
 article.md code { background: #ece5d4; padding: .08rem .35rem; border-radius: 4px; font-size: .85em; }
-article.md hr { border: none; border-top: 1px solid var(--rand); margin: 1.6rem 0; }
+article.md a.padlink { text-decoration: none; border-bottom: 1px dotted var(--goud); }
+article.md a.padlink code { background: #efe7d2; color: var(--groen-donker); }
+article.md a.padlink:hover code { background: var(--goud-licht); }
+article.md hr { border: none; border-top: 1px solid var(--rand); margin: 1.8rem 0; }
+article.md ul, article.md ol { padding-left: 1.35rem; }
+article.md li { margin-bottom: .2rem; }
 
-.tabelwikkel { overflow-x: auto; }
+/* --------------------------------------------------------------- tabellen */
+
+.tabelwikkel {
+  overflow-x: auto;
+  margin: 1.1rem 0 1.5rem;
+  border: 1px solid var(--rand);
+  border-radius: 10px;
+  background: var(--kaart);
+  box-shadow: var(--schaduw);
+}
 article.md table, .fm-blok table {
   border-collapse: collapse;
   width: 100%;
@@ -814,12 +1166,77 @@ article.md table, .fm-blok table {
   font-size: .88rem;
 }
 article.md th, article.md td, .fm-blok td {
-  border: 1px solid var(--rand);
-  padding: .45rem .65rem;
+  border: 0;
+  border-bottom: 1px solid var(--rand-zacht);
+  padding: .5rem .7rem;
   text-align: left;
   vertical-align: top;
+  line-height: 1.5;
 }
-article.md th { background: var(--groen-waas); font-family: var(--sans); font-size: .78rem; }
+/* Nergens automatisch afbreken: "Oosterzee" werd "Oos-terzee" en "Nibbixwoud"
+   werd "Nibbix-woud", en een afgebroken plaats- of familienaam is in een
+   stamboom hinderlijk. Wel een noodrem voor een lange archief-id of URL die
+   anders uit de cel loopt. */
+article.md td, article.md td a, article.md td code { overflow-wrap: break-word; }
+article.md td + td, article.md th + th { border-left: 1px solid var(--rand-zacht); }
+article.md tbody tr:nth-child(even) { background: var(--kaart-zacht); }
+article.md tbody tr:last-child > td { border-bottom: 0; }
+article.md th {
+  background: var(--groen-waas);
+  border-bottom: 1px solid var(--rand);
+  font-family: var(--sans);
+  font-size: .74rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--groen-donker);
+  white-space: nowrap;
+}
+.fm-blok table { border: 1px solid var(--rand); border-radius: 8px; }
+.fm-blok td { border-bottom: 1px solid var(--rand-zacht); }
+
+/* Op een telefoon wordt elke rij een kaartje met de kolomnaam als etiket:
+   vier kolommen in 420 pixels gaf één of twee woorden per regel. */
+@media (max-width: 760px) {
+  article.md .tabelwikkel {
+    overflow: visible;
+    border: 0;
+    background: none;
+    box-shadow: none;
+  }
+  article.md .tabelwikkel table,
+  article.md .tabelwikkel tbody,
+  article.md .tabelwikkel tr,
+  article.md .tabelwikkel td { display: block; width: auto; }
+  article.md .tabelwikkel thead { display: none; }
+  article.md .tabelwikkel tbody tr {
+    background: var(--kaart);
+    border: 1px solid var(--rand);
+    border-radius: 10px;
+    padding: .35rem .85rem .5rem;
+    margin-bottom: .7rem;
+    box-shadow: var(--schaduw);
+  }
+  article.md .tabelwikkel td {
+    border: 0;
+    border-top: 1px dashed var(--rand-zacht);
+    padding: .4rem 0;
+  }
+  article.md .tabelwikkel tr > td:first-child { border-top: 0; }
+  article.md .tabelwikkel td:empty { display: none; }
+  article.md .tabelwikkel td::before {
+    content: attr(data-kop);
+    display: block;
+    font-family: var(--sans);
+    font-size: .6rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .09em;
+    color: var(--inkt-vaag);
+    margin-bottom: .1rem;
+  }
+  article.md .tabelwikkel td[data-kop=""]::before { display: none; }
+}
 
 pre.codeblok {
   background: #2b261f;
@@ -853,10 +1270,56 @@ pre.codeblok {
   color: var(--groen);
 }
 
-.vn-ref a { text-decoration: none; }
-.voetnoten { margin-top: 2rem; font-size: .85rem; color: var(--inkt-zacht); border-top: 1px solid var(--rand); padding-top: .6rem; }
-.voetnoten h4 { margin: 0 0 .4rem; font-family: var(--sans); font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; }
-.vn-terug { text-decoration: none; font-family: var(--sans); }
+/* voetnoten: knopjes en geen ankerlinks — een hashwissel zou de router laten
+   navigeren en je uit het dossier gooien */
+.vn-ref button {
+  font-family: var(--sans);
+  font-size: .68em;
+  line-height: 1.5;
+  font-weight: 600;
+  color: var(--groen);
+  background: var(--groen-waas);
+  border: 0;
+  border-radius: 4px;
+  padding: 0 .28em;
+  margin-left: .1em;
+  cursor: pointer;
+}
+.vn-ref button:hover { background: var(--groen-licht); }
+.voetnoten {
+  margin-top: 2.4rem;
+  font-size: .86rem;
+  line-height: 1.6;
+  color: var(--inkt-zacht);
+  border-top: 1px solid var(--rand);
+  padding-top: .7rem;
+}
+.voetnoten h4 { margin: 0 0 .5rem; font-family: var(--sans); font-size: .68rem; text-transform: uppercase; letter-spacing: .1em; color: var(--inkt-vaag); }
+.voetnoten ol { padding-left: 1.6rem; }
+.voetnoten li { margin-bottom: .35rem; }
+.vn-terug {
+  font-family: var(--sans);
+  font-size: .9em;
+  color: var(--groen);
+  background: none;
+  border: 0;
+  padding: 0 .2em;
+  cursor: pointer;
+}
+.vn-terug:hover { color: var(--groen-donker); }
+
+/* even oplichten waar je naartoe gesprongen bent */
+.oplicht {
+  animation: oplicht 1.9s ease-out;
+  border-radius: 6px;
+  outline: 5px solid transparent;
+  outline-offset: 0;
+}
+@keyframes oplicht {
+  0%, 22% { background: var(--goud-licht); outline-color: var(--goud-licht); }
+  100% { background: transparent; outline-color: transparent; }
+}
+@media (prefers-reduced-motion: reduce) { .oplicht { animation-duration: .01s; } }
 
 .fm-blok { margin: .6rem 0 1rem; font-size: .82rem; }
 .fm-blok summary { cursor: pointer; color: var(--inkt-zacht); font-family: var(--sans); }
@@ -877,10 +1340,10 @@ pre.codeblok {
   border: 1px solid var(--rand);
   border-radius: 12px;
   padding: .8rem;
-  max-height: calc(100vh - 180px);
+  max-height: calc(100vh - var(--kop-marge) - 3rem);
   overflow: auto;
   position: sticky;
-  top: 82px;
+  top: var(--kop-marge);
   font-family: var(--sans);
   font-size: .84rem;
   box-shadow: var(--schaduw);
@@ -1121,6 +1584,27 @@ object.pdf { width: 100%; height: 78vh; border: 1px solid var(--rand); border-ra
 .zk-kop .status { font-size: .82rem; }
 .zk-regel { font-family: var(--sans); font-size: .77rem; color: var(--inkt-zacht); line-height: 1.5; }
 .zk-regel .gd { display: inline-block; width: 1em; color: var(--inkt-vaag); font-family: var(--serif); }
+/* feiten-grid van de persoonskaart: piepkleine etiketten links, waarden rechts */
+.zk-feiten {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: .18rem .6rem;
+  margin: .15rem 0 .1rem;
+  align-items: baseline;
+}
+.zk-feit { display: contents; }
+.zk-feit > span {
+  font-family: var(--sans);
+  font-size: .58rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--inkt-vaag);
+  text-align: right;
+  white-space: nowrap;
+}
+.zk-feit > div { font-family: var(--sans); font-size: .76rem; color: var(--inkt-zacht); line-height: 1.45; }
+.zk-feit .kt-reis { margin: 0; }
 .zk-aanhef { font-size: .8rem; font-style: italic; color: var(--inkt-zacht); line-height: 1.5; margin: .3rem 0; }
 .zk-voet { display: flex; gap: .3rem; flex-wrap: wrap; margin-top: .45rem; }
 
@@ -1273,12 +1757,12 @@ object.pdf { width: 100%; height: 78vh; border: 1px solid var(--rand); border-ra
 
 /* zweef- en kliklijst bij een stip */
 .leaflet-tooltip.k-tip {
-  max-width: 300px;
+  width: 300px;
   white-space: normal;
   border: 1px solid var(--rand);
-  border-radius: 10px;
+  border-radius: 12px;
   box-shadow: var(--schaduw-zwaar);
-  padding: .55rem .75rem .45rem;
+  padding: .6rem .8rem .5rem;
   font-family: var(--sans);
   background: var(--kaart);
   color: var(--inkt);
@@ -1296,28 +1780,72 @@ object.pdf { width: 100%; height: 78vh; border: 1px solid var(--rand); border-ra
   font-family: var(--serif);
   font-weight: 600;
   font-size: .98rem;
-  margin-bottom: .3rem;
+  margin-bottom: .35rem;
   display: flex;
+  justify-content: space-between;
   gap: .6rem;
   align-items: baseline;
 }
+.kt-route { display: inline-flex; align-items: baseline; gap: .35rem; flex-wrap: wrap; }
 .kt-n { font-family: var(--sans); font-size: .7rem; color: var(--inkt-vaag); font-weight: 400; white-space: nowrap; }
+
+/* groep per familielijn: een kleurrail links, de kleur van de lijn */
+.kt-groep {
+  border-left: 3px solid var(--kleur, var(--rand));
+  padding: .1rem 0 .15rem .55rem;
+  margin: .35rem 0;
+}
 .kt-lijn {
   display: flex;
   align-items: center;
   gap: .4rem;
-  font-size: .66rem;
+  font-size: .64rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: .08em;
   color: var(--inkt-zacht);
-  margin: .45rem 0 .15rem;
+  margin: 0 0 .15rem;
 }
-.kt-bol { width: 9px; height: 9px; border-radius: 50%; flex: none; }
-.kt-rij { display: flex; justify-content: space-between; gap: .7rem; font-size: .78rem; padding: .12rem 0; }
-.kt-rij a { color: var(--groen-donker); text-decoration: none; }
+.kt-bol { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.kt-rij {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: .7rem;
+  font-size: .8rem;
+  padding: .18rem 0 0;
+}
+.kt-rij a, .kt-wie { color: var(--groen-donker); text-decoration: none; font-weight: 600; }
 .kt-rij a:hover { text-decoration: underline; }
-.kt-rij span { color: var(--inkt-vaag); font-size: .72rem; text-align: right; }
+.kt-jaren { color: var(--inkt-vaag); font-size: .7rem; white-space: nowrap; }
+.kt-sub { font-size: .68rem; color: var(--inkt-vaag); line-height: 1.4; }
+
+/* de reis: plaatsjes als pilletjes met pijltjes ertussen; "hier" licht op */
+.kt-reis {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .16rem .28rem;
+  margin: .22rem 0 .3rem;
+  font-family: var(--sans);
+}
+.kr-stap {
+  background: var(--kaart-zacht);
+  border: 1px solid var(--rand-zacht);
+  border-radius: 999px;
+  padding: .05rem .48rem;
+  font-size: .66rem;
+  color: var(--inkt-zacht);
+  white-space: nowrap;
+  line-height: 1.5;
+}
+.kr-stap.hier {
+  background: var(--groen-licht);
+  border-color: var(--groen);
+  color: var(--groen-donker);
+  font-weight: 600;
+}
+.kr-pijl { display: inline-flex; color: var(--goud); font-size: .62rem; }
 .kt-voet {
   margin-top: .45rem;
   font-size: .68rem;
@@ -1353,12 +1881,291 @@ object.pdf { width: 100%; height: 78vh; border: 1px solid var(--rand); border-ra
   margin-left: .2rem;
 }
 
+/* ---------------------------------------------------------------- hero
+   De voorkant op het stamboom-tabblad: één zin die vertelt hoe ver het
+   onderzoek reikt, met de kerncijfers als tegels eronder. */
+
+.hero {
+  position: relative;
+  background:
+    radial-gradient(1200px 340px at 12% -40%, rgba(176, 141, 63, .16), transparent 60%),
+    linear-gradient(120deg, var(--groen-donker), var(--groen-nacht));
+  color: var(--papier);
+  border-radius: 18px;
+  padding: 1.7rem 2rem 1.5rem;
+  margin-bottom: 1.1rem;
+  box-shadow: var(--schaduw-zwaar);
+  overflow: hidden;
+}
+.hero::after {
+  content: "";
+  position: absolute;
+  inset: 10px;
+  border: 1px solid rgba(240, 230, 207, .18);
+  border-radius: 12px;
+  pointer-events: none;
+}
+.hero-boven {
+  margin: 0 0 .3rem;
+  font-family: var(--sans);
+  font-size: .68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .18em;
+  color: var(--goud-licht);
+}
+.hero-titel {
+  margin: 0 0 .45rem;
+  font-size: clamp(1.5rem, 3.2vw, 2.3rem);
+  line-height: 1.15;
+  letter-spacing: .01em;
+}
+.hero-onder {
+  margin: 0 0 1.1rem;
+  font-size: .98rem;
+  color: rgba(243, 238, 226, .82);
+  max-width: 62ch;
+}
+.hero-tegels {
+  display: flex;
+  gap: .6rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.1rem;
+}
+.hero-tegel {
+  display: flex;
+  flex-direction: column;
+  gap: .05rem;
+  min-width: 96px;
+  padding: .55rem .9rem .5rem;
+  background: rgba(255, 253, 246, .07);
+  border: 1px solid rgba(240, 230, 207, .18);
+  border-radius: 12px;
+}
+.hero-tegel strong { font-size: 1.45rem; line-height: 1.1; color: var(--goud-licht); font-variant-numeric: tabular-nums; }
+.hero-tegel span { font-family: var(--sans); font-size: .66rem; text-transform: uppercase; letter-spacing: .09em; color: rgba(243, 238, 226, .66); }
+.hero-acties { display: flex; gap: .5rem; flex-wrap: wrap; position: relative; z-index: 1; }
+.hero-acties .knopje { background: var(--papier); color: var(--groen-donker); }
+.hero-acties .knopje:hover { background: var(--goud-licht); color: var(--groen-nacht); }
+.hero-acties .knopje.stil { background: transparent; border-color: rgba(240, 230, 207, .35); color: rgba(243, 238, 226, .88); }
+.hero-acties .knopje.stil:hover { border-color: var(--goud); color: var(--goud-licht); }
+
+/* ---------------------------------------------------------------- leesbalk */
+
+#leesbalk {
+  position: fixed;
+  top: var(--kop-hoogte);
+  left: 0;
+  width: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--goud), #d8b25e);
+  border-radius: 0 3px 3px 0;
+  z-index: 39;
+  opacity: 0;
+  transition: opacity .2s;
+  pointer-events: none;
+}
+#leesbalk.aan { opacity: 1; }
+
+/* ---------------------------------------------------- mooier lezen (md) */
+
+/* een verhaal opent met een initiaal, zoals een boek dat zou doen */
+.verhaal-lees article.md > p:first-of-type::first-letter {
+  float: left;
+  font-size: 3.3em;
+  line-height: .82;
+  padding: .08em .12em 0 0;
+  font-weight: 600;
+  color: var(--groen-donker);
+}
+
+/* scheidingslijn als ornament: kort en goud, gecentreerd */
+article.md hr {
+  border: 0;
+  height: 2px;
+  max-width: 220px;
+  margin: 2.1rem auto;
+  background: linear-gradient(90deg, transparent, var(--goud), transparent);
+}
+
+/* voetnootvoorproefje in de zweefkaart */
+.zk-vn { font-size: .8rem; line-height: 1.55; color: var(--inkt-zacht); }
+.zk-vn a { color: var(--groen); }
+
+::selection { background: var(--goud-licht); color: var(--inkt); }
+
+/* ---------------------------------------------------------------- cijfers */
+
+.cijfers h3 {
+  margin: 0 0 .8rem;
+  font-family: var(--sans);
+  font-size: .78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  color: var(--groen-donker);
+}
+.cijfers h4 {
+  margin: 0 0 .45rem;
+  font-family: var(--sans);
+  font-size: .68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .09em;
+  color: var(--inkt-vaag);
+}
+.c-tegels { margin: 1rem 0 .4rem; }
+.c-tegels .hero-tegel { background: var(--kaart); border-color: var(--rand); box-shadow: var(--schaduw); }
+.c-tegels .hero-tegel strong { color: var(--groen-donker); }
+.c-tegels .hero-tegel span { color: var(--inkt-vaag); }
+
+.c-blok {
+  background: var(--kaart);
+  border: 1px solid var(--rand);
+  border-radius: 14px;
+  padding: 1.1rem 1.3rem 1rem;
+  margin: 1rem 0;
+  box-shadow: var(--schaduw);
+}
+
+/* balkjes per familielijn: elke rij draagt naam én aantal als tekst; de kleur
+   is dezelfde entiteitskleur als op de kaart en is versiering, geen codering */
+.c-balken { display: flex; flex-direction: column; gap: .45rem; }
+.c-rij { display: grid; grid-template-columns: 9.5em 1fr 3em; align-items: center; gap: .7rem; font-family: var(--sans); font-size: .84rem; }
+.c-label { text-align: right; color: var(--inkt-zacht); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.c-baan { height: 14px; background: var(--kaart-zacht); border-radius: 999px; overflow: hidden; border: 1px solid var(--rand-zacht); }
+.c-vul { display: block; height: 100%; border-radius: 999px; min-width: 4px; }
+.c-n { color: var(--inkt-vaag); font-size: .78rem; font-variant-numeric: tabular-nums; }
+
+.c-status { display: flex; gap: 2px; height: 16px; border-radius: 999px; overflow: hidden; margin-bottom: .55rem; }
+.c-seg { display: block; min-width: 5px; }
+.cs-ok { background: var(--ok); }
+.cs-half { background: var(--half); }
+.cs-vraag { background: #a8a8a8; }
+.cs-waak { background: var(--waak); }
+.c-statuslegenda { display: flex; gap: .5rem 1.1rem; flex-wrap: wrap; font-family: var(--sans); font-size: .8rem; color: var(--inkt-zacht); }
+.c-legchip .status { margin-left: 0; }
+
+.c-kolommen {
+  display: flex;
+  align-items: flex-end;
+  gap: .45rem;
+  padding: .3rem .2rem 0;
+  overflow-x: auto;
+}
+.c-kolom { display: flex; flex-direction: column; align-items: center; gap: .25rem; min-width: 34px; font-family: var(--sans); }
+.c-kn { font-size: .68rem; color: var(--inkt-vaag); font-variant-numeric: tabular-nums; }
+.c-staaf {
+  display: block;
+  width: 22px;
+  border-radius: 5px 5px 2px 2px;
+  background: linear-gradient(180deg, #3e7057, var(--groen));
+}
+.c-kg { font-size: .72rem; font-weight: 600; color: var(--inkt-zacht); }
+.c-voetnoot { margin: .6rem 0 0; font-family: var(--sans); font-size: .76rem; color: var(--inkt-vaag); }
+
+.c-records { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: .8rem; }
+.c-record { border: 1px solid var(--rand-zacht); border-radius: 12px; padding: .7rem .9rem; background: var(--kaart-zacht); }
+.c-record-wat { font-size: 1.02rem; font-weight: 600; margin: .25rem 0 .1rem; line-height: 1.35; }
+.c-record-sub { font-family: var(--sans); font-size: .78rem; color: var(--inkt-zacht); }
+
+.c-woordenrij { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 1.1rem; }
+.c-chips { display: flex; gap: .3rem; flex-wrap: wrap; }
+.c-chips .chip { font-size: .76rem; }
+
+/* --------------------------------------------------------- volledig scherm */
+
+/* de boom of de kaart neemt het hele scherm; Esc of de knop sluit weer */
+.boom-vlak:fullscreen, .kaart-vlak:fullscreen {
+  height: 100%;
+  min-height: 100%;
+  border-radius: 0;
+  border: 0;
+  background-color: var(--kaart-zacht);
+}
+.vol-balk { display: none; }
+.boom-vlak:fullscreen .vol-balk {
+  display: flex;
+  gap: .3rem;
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 5;
+  background: var(--kaart);
+  border: 1px solid var(--rand);
+  border-radius: 12px;
+  padding: .35rem .45rem;
+  box-shadow: var(--schaduw-zwaar);
+}
+.vol-balk button {
+  font-family: var(--sans);
+  font-size: .82rem;
+  border: 1px solid var(--rand);
+  background: var(--kaart);
+  color: var(--inkt);
+  border-radius: 8px;
+  padding: .32rem .7rem;
+  cursor: pointer;
+}
+.vol-balk button:hover { border-color: var(--groen); color: var(--groen); }
+
+/* ------------------------------------------------------- binnenkomst & rust */
+
+/* elke pagina schuift zacht binnen; wie liever geen beweging heeft, krijgt geen */
+#inhoud > .paneel, #inhoud > .vol, #inhoud > .verkenner {
+  animation: binnenkomst .3s ease-out both;
+}
+@keyframes binnenkomst {
+  from { opacity: 0; transform: translateY(7px); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #inhoud > .paneel, #inhoud > .vol, #inhoud > .verkenner { animation: none; }
+  .p-tegel, .v-kaart, .bkaart, .fkaart, .tb-kaart { transition: none; }
+}
+
 /* ---------------------------------------------------------------- smal scherm */
 
-@media (max-width: 900px) {
-  #kop { gap: .8rem; padding: .6rem .9rem; }
-  .zoekdoos { margin-left: 0; width: 100%; }
+/* De balk plakt nu écht (zie de opmerking bij body), en dan telt elke pixel:
+   zodra hij omsloeg was hij 127 tot 161 px hoog — een vijfde van een
+   telefoonscherm, permanent in beeld tijdens het lezen. Compacter: geen
+   ondertitel, kleiner rondje, en de tabbladen op één schuivende regel.
+   Dit begint al bij 1200 px, want daar slaat hij om. */
+@media (max-width: 1200px) {
+  #kop { gap: .45rem .8rem; padding: .45rem .8rem; }
+  .kop-logo { width: 32px; height: 32px; }
+  .kop-logo svg { width: 20px; height: 20px; }
+  .kop-tekst em { display: none; }
+  .kop-tekst strong { font-size: 1.05rem; }
+  #tabs {
+    order: 3;
+    width: 100%;
+    overflow-x: auto;
+    gap: .15rem;
+    scrollbar-width: none;
+  }
+  #tabs::-webkit-scrollbar { display: none; }
+  #tabs a { padding: .28rem .7rem; font-size: .84rem; white-space: nowrap; }
+  .zoekdoos { order: 2; margin-left: auto; flex: 1; min-width: 120px; }
   #zoek { width: 100%; }
+}
+
+/* op een heel smal scherm blijft alleen het rondje over, anders slaat de
+   eerste regel alsnog om en is de balk weer 130 px */
+@media (max-width: 430px) {
+  .kop-tekst { display: none; }
+}
+
+/* op een telefoon paste er één feit per regel in de kopkaart, waardoor je vijf
+   keer moet vegen voordat de tekst begint; twee kolommen halveert dat */
+@media (max-width: 560px) {
+  .held-feiten, .info-rooster {
+    grid-template-columns: repeat(auto-fit, minmax(135px, 1fr));
+    gap: .5rem .9rem;
+  }
+}
+
+@media (max-width: 900px) {
   .verkenner { grid-template-columns: 1fr; }
   .v-boom { position: static; max-height: 40vh; }
   .boom-vlak { height: calc(100vh - 330px); }

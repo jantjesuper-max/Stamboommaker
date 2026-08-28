@@ -16,6 +16,7 @@ let VERKENNER = [];
 let TIJDSBEELD = [];
 let GEBEURTENIS_MAP = {};
 let VERHALEN = [];
+let INSTELLINGEN = {};   // titel en generatie-uitleg uit stamboom.json (/api/instellingen)
 let VERHAAL_MAP = {};
 let ZOEKTERM = "";
 const OPEN_MAPPEN = new Set(["personen", "documenten", "boek"]);
@@ -24,6 +25,41 @@ let ZOOM = 1;                 // zoomniveau van de stamboom
 let BOOM_BREEDTE = 0;         // canvasbreedte van de laatste boomweergave
 const FILTER = { lijn: "", gen: "", status: new Set(), weergave: "kaarten" };
 const FILTER_V = { lijn: "", rubriek: "", sort: "score", zoek: "" };
+
+/* Takkenfilter — het "grote filter" waarmee je één kant van de stamboom deelt.
+   De waarde staat als ?tak=… in de query VÓÓR de hash (bijv.
+   http://localhost:<poort>/?tak=vaderskant#/boom), want de hash wisselt bij elke
+   klik en de query blijft dan staan. Zo'n link is dus deelbaar: wie hem opent
+   ziet alléén die kant — personen, stamboom, kaart, verhalen én tijdsbeeld.
+   Een kant is "die persoon plus al zijn voorouders", geklommen langs de
+   vader-/moeder-wikilinks; daarnaast kan elke familielijn apart (?tak=lijn:…). */
+const TAKKEN = {
+  vaderskant:  { naam: "Vaderskant",  anker: "", uitleg: "" },
+  moederskant: { naam: "Moederskant", anker: "", uitleg: "" },
+};
+
+/* De ankers worden uit de boom zelf afgeleid: de proband is de persoon op
+   generatie 0 met ouders in de dossiers, en de twee kanten zijn diens vader
+   en moeder plus al hún voorouders. Zo hoeven hier geen namen te staan en
+   werkt het filter in elke stamboom die dit format volgt. */
+function bepaalTakken() {
+  const proband = PERSONEN
+    .filter(p => +p.generatie === 0)
+    .find(p => (p.vader && PERSOON_MAP[p.vader]) || (p.moeder && PERSOON_MAP[p.moeder]));
+  if (!proband) return;
+  const zet = (sleutel, id) => {
+    const ouder = id && PERSOON_MAP[id];
+    if (!ouder) return;
+    TAKKEN[sleutel].anker = id;
+    TAKKEN[sleutel].uitleg = ouder.naam + " en alle voorouders daarboven";
+  };
+  zet("vaderskant", proband.vader);
+  zet("moederskant", proband.moeder);
+}
+let TAK = "";          // actieve filterwaarde uit de URL ("" = hele stamboom)
+let TAK_TITEL = "";    // leesbare naam voor de balk en de paginatitel
+let LIJNEN_VOL = [];   // alle familielijnen vóór het filteren (voor de keuzelijst)
+let TAK_KEUZES = [];   // welke takken echt bestaan (anker heeft een dossier)
 
 const inhoud = document.getElementById("inhoud");
 
@@ -43,6 +79,9 @@ const IKONEN = {
   stop: '<rect x="6.5" y="6.5" width="11" height="11" rx="1.5"/>',
   links: '<path d="m14.5 5.5-6.5 6.5 6.5 6.5"/>',
   rechts: '<path d="m9.5 5.5 6.5 6.5-6.5 6.5"/>',
+  pijl: '<path d="M4 12h16"/><path d="m14 6 6 6-6 6"/>',
+  omhoog: '<path d="M12 20V5"/><path d="m6 11 6-6 6 6"/>',
+  lijst: '<path d="M8 6h13M8 12h13M8 18h13"/><path d="M3.5 6h.01M3.5 12h.01M3.5 18h.01"/>',
 };
 
 function ikoon(naam) {
@@ -100,12 +139,69 @@ function statusBadge(s) {
   return '<span class="badge b-' + statusKlasse(s) + '">' + esc(s) + " " + esc(STATUS_WOORD[s] || "") + "</span>";
 }
 
-const GENERATIETERMEN = ["jij zelf", "ouders", "grootouders", "overgrootouders",
+/* Monogram: initialen in de kleur van de familielijn. Er zijn geen foto's van
+   mensen uit 1700, maar zo krijgen de boom, de personenlijst en de dossiers
+   toch één gezicht — en de kleur is overal dezelfde als op de kaart. */
+function initialen(naam) {
+  const delen = String(naam || "").split(/\s+/).filter(d => /^\p{Lu}/u.test(d));
+  if (!delen.length) return "?";
+  return (delen[0][0] + (delen.length > 1 ? delen[delen.length - 1][0] : "")).toUpperCase();
+}
+
+function monogramHtml(p, klasse) {
+  return '<span class="monogram' + (klasse ? " " + klasse : "") + '" style="--mk:' +
+    lijnKleur(p.lijn) + '" aria-hidden="true">' + esc(initialen(p.naam)) + "</span>";
+}
+
+/* Hoe oud iemand werd: exact als beide datums volledig zijn, anders het
+   verschil tussen de jaartallen met "ongeveer" ervoor. */
+function leeftijdVan(p) {
+  const vol = s => /(\d{2})-(\d{2})-(\d{4})/.exec(s || "");
+  const jaar = s => { const m = /(\d{4})/.exec(s || ""); return m ? +m[1] : null; };
+  const gj = jaar(p.geboren), oj = jaar(p.overleden);
+  if (gj == null || oj == null) return "";
+  const g = vol(p.geboren), o = vol(p.overleden);
+  let n, circa = /\b(ca|circa|vermoedelijk|voor|vóór|na)\b/i.test(p.geboren + " " + p.overleden);
+  if (g && o && !circa) {
+    n = +o[3] - +g[3];
+    if (+o[2] < +g[2] || (+o[2] === +g[2] && +o[1] < +g[1])) n--;
+  } else {
+    n = oj - gj;
+    circa = true;
+  }
+  if (n < 0 || n > 115) return "";
+  return (circa ? "ongeveer " : "") + n + " jaar geworden";
+}
+
+/* Schermvullend tonen van een vlak (boom of kaart); Esc of dezelfde knop sluit. */
+function volledigScherm(el) {
+  if (!el) return;
+  if (document.fullscreenElement) {
+    document.exitFullscreen();
+  } else if (el.requestFullscreen) {
+    el.requestFullscreen();
+  }
+}
+
+// na het wisselen moet Leaflet zijn maat opnieuw opmeten
+document.addEventListener("fullscreenchange", () => {
+  if (KAART_MAP) setTimeout(() => KAART_MAP.invalidateSize(), 150);
+});
+
+function leestijdChip(tekst) {
+  const woorden = String(tekst || "").split(/\s+/).length;
+  const minuten = Math.max(1, Math.round(woorden / 200));
+  return '<span class="chip chip-stil" title="' + woorden + ' woorden">± ' + minuten +
+    " min lezen</span>";
+}
+
+const GENERATIETERMEN = ["jijzelf", "ouders", "grootouders", "overgrootouders",
   "betovergrootouders", "oudouders", "oudgrootouders", "oudovergrootouders",
   "oudbetovergrootouders", "stamouders", "stamgrootouders", "stamovergrootouders",
   "stambetovergrootouders"];
 
 function generatieTerm(g) {
+  if (g < 0) return "kinderen";   // generatie -1: onder de proband
   return GENERATIETERMEN[g] || (isNaN(g) ? "" : "generatie " + g);
 }
 
@@ -181,6 +277,157 @@ function zoekTekst(p) {
     (p.woonplaatsen || []).join(" ")].join(" ").toLowerCase();
 }
 
+/* Het opsommingsteken van een lijstregel. Maximaal drie cijfers vóór de punt:
+   met \d+ werd een regel die met een jaartal begint ("1839. Doorzocht op beide
+   spellingen…") een genummerd lijstitem, en dan valt de tekst uit elkaar. Eén
+   constante, want het patroon wordt op twee plaatsen gebruikt en die liepen
+   uiteen — dat was op zichzelf al een bug. */
+const LIJSTTEKEN = /^(\s*)([-*]|\d{1,3}\.)\s+(.*)$/;
+
+/* --------------------------------------------------------------- leespagina's
+   Een dossier heeft acht tot vijftien kopjes en wordt tienduizend pixels lang.
+   Deze hulpjes maken daar een navigeerbare leespagina van: een inhoudsopgave
+   uit de kopjes, en scrollen zónder de hash aan te raken — want de router
+   leest de hash, en een gewone ankerlink (#vn-1 onder een voetnoot) gooide je
+   daardoor uit het dossier naar de stamboom. */
+
+// de kopregel zoals een lezer hem wil zien: zonder markdown-tekens, zonder
+// wikilink-haakjes en zonder de statustekens die vooraan een kopje staan
+function platteTekst(s) {
+  return String(s ?? "")
+    .replace(/`([^`]*)`/g, "$1")
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+    .replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_, id, alias) => alias || id)
+    .replace(/\[\^[^\]]+\]/g, "")
+    .replace(/\*+/g, "")
+    .replace(/^[\s✓◐?⚠⛔ⓘ]+/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// accenten hoeven er niet af: alles buiten a-z0-9 wordt toch een streepje
+function slugMaak(s) {
+  const slug = platteTekst(s).toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  return slug || "kop";
+}
+
+/* Een pad in `code`-opmaak dat naar een bestand van dit project verwijst, wordt
+   klikbaar — een dossier naar zijn dossierpagina, een verhaal naar het verhaal,
+   de rest naar de verkenner. Alleen als het bestand echt bestaat: een pad met
+   een … erin (afgekapt in de tekst) blijft gewoon tekst. */
+function projectPadHref(pad) {
+  if (!/^[a-z0-9_.-]+\/[^\s]+$/i.test(pad)) return null;
+  const mPersoon = /^personen\/([a-z0-9-]+)\.md$/.exec(pad);
+  if (mPersoon && PERSOON_MAP[mPersoon[1]]) return persoonHash(mPersoon[1]);
+  const mVerhaal = /^boek\/verhalen\/([a-z0-9-]+)\.md$/.exec(pad);
+  if (mVerhaal && VERHAAL_MAP[mVerhaal[1]]) return verhaalHash(mVerhaal[1]);
+  const mTb = /^tijdsbeeld\/([a-z0-9-]+)\.md$/.exec(pad);
+  if (mTb && GEBEURTENIS_MAP[mTb[1]]) return "#/gebeurtenis/" + encodeURIComponent(mTb[1]);
+  return zoekKnoop(pad) ? verkennerHash(pad) : null;
+}
+
+/* De inhoudsopgave, uit de kopjes van niveau 2. Onder de drie kopjes is een
+   index meer ruis dan hulp, dus dan komt hij er niet. */
+function inhoudsopgaveHtml(kopjes) {
+  const items = (kopjes || []).filter(k => k.niveau === 2 && k.tekst);
+  if (items.length < 3) return "";
+  let h = '<nav class="inhoudsopgave" aria-label="Op deze pagina">' +
+    '<p class="io-kop">' + ikoon("lijst") + " Op deze pagina</p><ol>";
+  for (const k of items) {
+    h += '<li><button type="button" class="io-link" data-naar="' + esc(k.id) +
+      '" title="' + esc(k.tekst) + '">' + esc(k.tekst) + "</button></li>";
+  }
+  h += "</ol></nav>";
+  return h;
+}
+
+/* De tekstlaag van een leespagina: de inhoudsopgave naast (breed scherm) of
+   boven (smal scherm) het artikel. In de verkenner staat links al een
+   bestandsboom; daar blijft het bij de strip bovenaan, anders navigeren twee
+   kolommen naast elkaar om dezelfde aandacht. */
+function leeslaag(html, kopjes, klasse) {
+  const io = inhoudsopgaveHtml(kopjes);
+  return '<div class="leeslaag' + (io ? "" : " geen-io") + (klasse ? " " + klasse : "") + '">' +
+    io + '<article class="md">' + html + "</article></div>";
+}
+
+/* De menubalk plakt bovenaan en is 66 px hoog op een breed scherm, maar 90 tot
+   160 px zodra de tabbladen omslaan. Alles wat eronderuit moet komen — een
+   kopje waar je naartoe springt, de plakkende inhoudsopgave, de bestandsboom —
+   rekent met --kop-hoogte, dus die wordt hier gemeten in plaats van geraden. */
+function meetKopHoogte() {
+  const kop = document.getElementById("kop");
+  if (kop) document.documentElement.style.setProperty("--kop-hoogte", kop.offsetHeight + "px");
+}
+window.addEventListener("resize", meetKopHoogte);
+
+function scrollNaarAnker(id) {
+  const doel = document.getElementById(id);
+  if (!doel) return;
+  doel.scrollIntoView({ behavior: "smooth", block: "start" });
+  doel.classList.add("oplicht");
+  setTimeout(() => doel.classList.remove("oplicht"), 1900);
+}
+
+/* Eén klikafhandelaar voor de hele inhoud: hij overleeft het vervangen van
+   innerHTML, dus elke leespagina krijgt hem gratis. */
+document.addEventListener("click", e => {
+  if (e.target.closest("[data-boven]")) {
+    e.preventDefault();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    return;
+  }
+  const naar = e.target.closest("[data-naar]");
+  if (!naar) return;
+  e.preventDefault();
+  scrollNaarAnker(naar.dataset.naar);
+});
+
+/* De leesvoortgangsbalk: een dun gouden lijntje onder de menubalk dat meegroeit
+   met hoe ver je in een dossier of verhaal bent. Alleen op leespagina's. */
+const LEESBALK = document.createElement("div");
+LEESBALK.id = "leesbalk";
+document.body.appendChild(LEESBALK);
+
+/* Welk kopje lees je nu? De inhoudsopgave licht het op, en op een smal scherm
+   schuift de strip mee zodat je ziet waar je bent. */
+let ioWacht = false;
+function werkLeespaginaBij() {
+  const naarBoven = document.getElementById("naar-boven");
+  if (naarBoven) naarBoven.classList.toggle("zichtbaar", window.scrollY > 700);
+  if (inhoud.querySelector(".leeslaag article.md")) {
+    const hoogte = document.documentElement.scrollHeight - window.innerHeight;
+    LEESBALK.style.width = (hoogte > 60
+      ? Math.min(100, Math.max(0, window.scrollY / hoogte * 100)) : 0) + "%";
+    LEESBALK.classList.add("aan");
+  } else {
+    LEESBALK.classList.remove("aan");
+  }
+  const nav = inhoud.querySelector(".inhoudsopgave");
+  if (!nav) return;
+  const knoppen = Array.from(nav.querySelectorAll(".io-link"));
+  let actief = knoppen[0];
+  for (const k of knoppen) {
+    const doel = document.getElementById(k.dataset.naar);
+    if (doel && doel.getBoundingClientRect().top <= 150) actief = k;
+  }
+  for (const k of knoppen) {
+    const was = k.classList.contains("nu");
+    k.classList.toggle("nu", k === actief);
+    // alleen bij een wisseling meeschuiven, anders vecht dit met handmatig scrollen
+    if (!was && k === actief && nav.scrollWidth > nav.clientWidth + 4) {
+      k.scrollIntoView({ block: "nearest", inline: "center" });
+    }
+  }
+}
+window.addEventListener("scroll", () => {
+  if (ioWacht) return;
+  ioWacht = true;
+  requestAnimationFrame(() => { ioWacht = false; werkLeespaginaBij(); });
+}, { passive: true });
+
 /* ------------------------------------------------------------- markdown-weergave */
 
 function mdRender(bron, basisMap) {
@@ -223,6 +470,10 @@ function mdRender(bron, basisMap) {
         const g = GEBEURTENIS_MAP[mTb[1]];
         return tok('<a class="tb-verwijzing" href="#/gebeurtenis/' + encodeURIComponent(g.id) + '">' + esc(g.titel) + "</a>");
       }
+      // en elk ander projectpad dat echt bestaat wordt een klikbaar pad
+      // (c is hier al door esc() heen; projectpaden bevatten geen &, < of >)
+      const href = projectPadHref(c);
+      if (href) return tok('<a class="padlink" href="' + href + '"><code>' + c + "</code></a>");
       return tok("<code>" + c + "</code>");
     });
     s = s.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (_, alt, src) => {
@@ -246,9 +497,15 @@ function mdRender(bron, basisMap) {
       if (g) return tok('<a class="wikilink" href="#/gebeurtenis/' + encodeURIComponent(id) + '">' + esc(alias || g.titel) + "</a>");
       return tok('<span class="wikilink ontbreekt" title="nog geen dossier">' + esc(alias || id) + "</span>");
     });
+    // géén href="#vn-1": dat is een hashwissel, en de router zou de pagina verlaten
     s = s.replace(/\[\^([^\]]+)\]/g, (_, n) =>
-      tok('<sup class="vn-ref" id="vnref-' + esc(n) + '"><a href="#vn-' + esc(n) + '">' + esc(n) + "</a></sup>"));
-    s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+      tok('<sup class="vn-ref" id="vnref-' + esc(n) + '">' +
+        '<button type="button" data-naar="vn-' + esc(n) + '" title="naar de voetnoot">' + esc(n) + "</button></sup>"));
+    // een losse * mag binnen het vette stuk staan (cursief binnen vet), maar
+    // ** niet — anders zou één vetblok tot het volgende doorlopen. Zonder deze
+    // uitzondering bleef "**acht van de negen … in *Spanbroek*.**" met sterretjes
+    // en al op de pagina staan.
+    s = s.replace(/\*\*((?:[^*]|\*(?!\*))+)\*\*/g, "<strong>$1</strong>");
     s = s.replace(/(^|[\s(>„“"])\*([^*\n]+)\*/g, "$1<em>$2</em>");
     s = s.replace(/✓/g, '<span class="s-ok">✓</span>')
          .replace(/◐/g, '<span class="s-half">◐</span>')
@@ -259,8 +516,18 @@ function mdRender(bron, basisMap) {
 
   const uit = [];
   const voetnoten = [];
+  const kopjes = [];              // voor de inhoudsopgave van de leespagina
+  const gebruikteIds = new Set();
   let paragraaf = [];
   const lijstStack = [];
+
+  function kopId(tekst) {
+    let id = "k-" + slugMaak(tekst);
+    let n = 2;
+    while (gebruikteIds.has(id)) id = "k-" + slugMaak(tekst) + "-" + n++;
+    gebruikteIds.add(id);
+    return id;
+  }
 
   function sluitParagraaf() {
     if (paragraaf.length) {
@@ -296,18 +563,52 @@ function mdRender(bron, basisMap) {
     if (mKop) {
       sluitParagraaf(); sluitAlleLijsten();
       const niveau = mKop[1].length;
-      uit.push("<h" + niveau + ">" + inline(mKop[2]) + "</h" + niveau + ">");
+      const rauw = mKop[2];
+      const plat = platteTekst(rauw);
+      const id = kopId(plat);
+      if (niveau === 2 || niveau === 3) kopjes.push({ niveau, tekst: plat, id });
+      // "Naam (1770 – 1862) — tweeënnegentig jaar oud" is een titel plus een
+      // ondertitel; op twee regels leest dat veel beter dan als één lange kop
+      const mSplits = niveau === 1 ? /^(.{4,}?)\s+—\s+(.+)$/.exec(rauw) : null;
+      const binnen = mSplits
+        ? '<span class="md-titel-hoofd">' + inline(mSplits[1]) + "</span>" +
+          '<span class="md-titel-onder">' + inline(mSplits[2]) + "</span>"
+        : inline(rauw);
+      uit.push("<h" + niveau + ' id="' + id + '">' + binnen + "</h" + niveau + ">");
       continue;
     }
 
     if (/^\s*(---+|\*\*\*+)\s*$/.test(regel)) { sluitParagraaf(); sluitAlleLijsten(); uit.push("<hr>"); continue; }
 
+    /* Citaatblok. De 315 meerregelige citaten in dit project zijn allemaal
+       zacht afgebroken alinea's (geen enkele met een harde markdown-breuk),
+       dus de regels van één alinea worden aan elkaar geplakt. Regel per regel
+       renderen scheurde vet en cursief dat over de regelovergang liep uit
+       elkaar — dan stond er letterlijk "**Een huismanswoning" in het citaat.
+       Een lege > -regel scheidt alinea's; twee spaties of een \ aan het eind
+       van een regel blijft een echte regelbreuk. */
     if (/^\s*>/.test(regel)) {
       sluitParagraaf(); sluitAlleLijsten();
       const buffer = [];
       while (i < regels.length && /^\s*>/.test(regels[i])) buffer.push(regels[i++].replace(/^\s*>\s?/, ""));
       i--;
-      uit.push("<blockquote>" + buffer.map(r => inline(r)).join("<br>") + "</blockquote>");
+      const alineas = [];
+      let nu = [];
+      for (const r of buffer) {
+        if (!r.trim()) { if (nu.length) { alineas.push(nu); nu = []; } continue; }
+        nu.push(r);
+      }
+      if (nu.length) alineas.push(nu);
+      const blok = alineas.map(a => {
+        let t = "";
+        a.forEach((r, n) => {
+          const hard = /(\s\s|\\)$/.test(r);
+          t += r.replace(/(\s\s|\\)+$/, "").trim();
+          if (n < a.length - 1) t += hard ? "\n" : " ";
+        });
+        return "<p>" + inline(t).replace(/\n/g, "<br>") + "</p>";
+      }).join("");
+      uit.push("<blockquote>" + (blok || "") + "</blockquote>");
       continue;
     }
 
@@ -323,15 +624,19 @@ function mdRender(bron, basisMap) {
       let t = '<div class="tabelwikkel"><table><thead><tr>';
       t += koppen.map(k => "<th>" + inline(k) + "</th>").join("");
       t += "</tr></thead><tbody>";
+      // data-kop draagt de kolomnaam mee: op een telefoon wordt elke rij een
+      // kaartje met die naam als etiket, in plaats van vier woorden per regel
+      const etiketten = koppen.map(k => platteTekst(k));
       for (const rij of rijen)
-        t += "<tr>" + koppen.map((_, k) => "<td>" + inline(rij[k] || "") + "</td>").join("") + "</tr>";
+        t += "<tr>" + koppen.map((_, k) =>
+          '<td data-kop="' + esc(etiketten[k]) + '">' + inline(rij[k] || "") + "</td>").join("") + "</tr>";
       t += "</tbody></table></div>";
       uit.push(t);
       continue;
     }
 
-    // lijst (met nesting en taakvinkjes)
-    const mLijst = /^(\s*)([-*]|\d+\.)\s+(.*)$/.exec(regel);
+    // lijst (met nesting en taakvinkjes); zie LIJSTTEKEN over de jaartallen
+    const mLijst = LIJSTTEKEN.exec(regel);
     if (mLijst) {
       sluitParagraaf();
       const indent = mLijst[1].length;
@@ -347,6 +652,19 @@ function mdRender(bron, basisMap) {
         uit.push("</li>");
       }
       let item = mLijst[3];
+      /* Zacht afgebroken vervolgregels horen bij dit item en worden er hier
+         aan geplakt. Regel per regel renderen scheurde vet en cursief dat over
+         de regelovergang liep uit elkaar — precies dezelfde fout als in een
+         citaatblok, en zij raakte 132 van de 278 leespagina's: elke "Open
+         vragen"-lijst van dit project is zo geschreven, en daar stond dus
+         letterlijk "** Huijbert Jacobse van Schie, gedoopt" op de pagina. */
+      while (i + 1 < regels.length
+             && /^\s{2,}\S/.test(regels[i + 1])
+             && !LIJSTTEKEN.test(regels[i + 1])
+             && !/^\s*[|>]/.test(regels[i + 1])
+             && !/^\s*#{1,6}\s/.test(regels[i + 1])) {
+        item += " " + regels[++i].trim();
+      }
       const mTaak = /^\[( |x|X)\]\s*(.*)$/.exec(item);
       if (mTaak) {
         const vink = mTaak[1].toLowerCase() === "x";
@@ -369,18 +687,20 @@ function mdRender(bron, basisMap) {
   sluitAlleLijsten();
 
   if (voetnoten.length) {
-    uit.push('<div class="voetnoten"><h4>Voetnoten</h4><ol>');
+    uit.push('<div class="voetnoten" id="k-voetnoten"><h4>Voetnoten</h4><ol>');
     for (const v of voetnoten)
       uit.push('<li id="vn-' + esc(v.n) + '" value="' + esc(v.n) + '">' + inline(v.tekst) +
-               ' <a class="vn-terug" href="#vnref-' + esc(v.n) + '" title="terug naar de tekst">↑</a></li>');
+               ' <button type="button" class="vn-terug" data-naar="vnref-' + esc(v.n) +
+               '" title="terug naar de tekst">↑</button></li>');
     uit.push("</ol></div>");
+    kopjes.push({ niveau: 2, tekst: "Voetnoten", id: "k-voetnoten" });
   }
 
   let html = uit.join("\n");
   for (let ronde = 0; ronde < 5 && /\u0000\d+\u0000/.test(html); ronde++) {
     html = html.replace(/\u0000(\d+)\u0000/g, (_, n) => tokens[+n]);
   }
-  return { html, frontmatter: fm };
+  return { html, frontmatter: fm, kopjes };
 }
 
 function frontmatterTabel(fm) {
@@ -467,16 +787,65 @@ function boomKaart(k, B, x, y) {
   }
   const p = k.p;
   h += '<a class="bkaart rand-' + statusKlasse(p.status) + '" data-pid="' + esc(p.id) + '" href="' + persoonHash(p.id) + '">' +
-    '<span class="bk-naam" title="' + esc(p.naam) + '">' + esc(p.naam) + "</span>" +
+    monogramHtml(p, "bk-mono") +
+    '<span class="bk-tekst"><span class="bk-naam" title="' + esc(p.naam) + '">' + esc(p.naam) + "</span>" +
     '<span class="bk-sub">' + (esc(jarenVan(p)) || "&nbsp;") + statusHtml(p.status) +
     (p.documenten ? '<span class="bk-doc" title="' + p.documenten + ' documenten in de map">' + ikoon("doc") + p.documenten + "</span>" : "") +
-    "</span></a>";
+    "</span></span></a>";
   if (p.vader || p.moeder) {
     h += '<button class="klapknop" data-klap="' + esc(p.id) + '" title="' +
       (k.dicht ? "tak uitklappen (" + k.verborgen + " verborgen)" : "tak inklappen") + '">' +
       (k.dicht ? "+" + k.verborgen : "−") + "</button>";
   }
   return h + "</div>";
+}
+
+/* De voorkant van de site: één zin die vertelt hoe ver dit onderzoek reikt,
+   met de kerncijfers eronder. Rekent op de (eventueel op een tak gefilterde)
+   lijsten, dus een gedeelde vaderskant-link krijgt zijn eigen cijfers. */
+function boomHero() {
+  if (!PERSONEN.length) return "";
+  const jaartal = p => { const m = /(\d{4})/.exec(p.geboren || ""); return m ? +m[1] : null; };
+  const metJaar = PERSONEN.filter(p => jaartal(p) != null);
+  const oudsteJaar = metJaar.length ? Math.min(...metJaar.map(jaartal)) : null;
+  const gens = PERSONEN.map(p => +p.generatie).filter(g => !isNaN(g));
+  const generaties = gens.length ? Math.max(...gens) - Math.min(...gens) + 1 : 0;
+  const docs = PERSONEN.reduce((s, p) => s + (+p.documenten || 0), 0);
+  const jongste = [...PERSONEN].sort((a, b) => (+a.generatie || 0) - (+b.generatie || 0))[0];
+  const jongsteJaar = jongste ? jaartal(jongste) : null;
+  const span = oudsteJaar && jongsteJaar ? jongsteJaar - oudsteJaar : null;
+
+  let titel;
+  if (jongste && jongsteJaar && oudsteJaar) {
+    titel = "Van " + esc(jongste.naam.split(" ")[0]) + " (" + jongsteJaar + ") tot het jaar " + oudsteJaar;
+  } else {
+    titel = "De familie, generatie voor generatie";
+  }
+  let h = '<section class="hero">';
+  h += '<p class="hero-boven">' + esc(TAK_TITEL || "de hele familie in kaart") + "</p>";
+  h += '<h1 class="hero-titel">' + titel + "</h1>";
+  h += '<p class="hero-onder">' + PERSONEN.length + " voorouders" +
+    (span ? ", " + span + " jaar familiegeschiedenis" : "") +
+    ". Elk feit draagt een bron, elke stip op de kaart is een gelezen akte.</p>";
+  h += '<div class="hero-tegels">' +
+    heroTegel(PERSONEN.length, "voorouders") +
+    heroTegel(generaties, "generaties") +
+    (span ? heroTegel(span, "jaar terug") : "") +
+    heroTegel(docs, "documenten") +
+    heroTegel(VERHALEN.length, "verhalen") +
+    heroTegel(TIJDSBEELD.length, "gebeurtenissen") +
+    "</div>";
+  h += '<div class="hero-acties">' +
+    '<a class="knopje" href="#/kaart">' + ikoon("map") + " Bekijk de kaart</a>" +
+    '<a class="knopje" href="#/verhalen">' + ikoon("boek") + " Lees de verhalen</a>" +
+    '<a class="knopje stil" href="#/cijfers">' + ikoon("lijst") + " Alle cijfers</a>" +
+    "</div>";
+  h += "</section>";
+  return h;
+}
+
+function heroTegel(waarde, label) {
+  return '<div class="hero-tegel"><strong>' + waarde + "</strong><span>" + esc(label) + "</span></div>";
 }
 
 function toonBoom(focusId, herstel) {
@@ -491,12 +860,14 @@ function toonBoom(focusId, herstel) {
   const Y = k => B.kop + k.rij * B.rij;
 
   let h = '<div class="vol">';
+  h += boomHero();
   h += '<div class="boom-balk"><div class="boom-stats">' + boomStats() + "</div>" +
     '<div class="boom-zoom">' +
     '<button data-zoom="uit" title="verkleinen">−</button>' +
-    '<button data-zoom="reset" id="zoompct" title="terug naar 100%">' + Math.round(ZOOM * 100) + "%</button>" +
+    '<button data-zoom="reset" class="zoompct" title="terug naar 100%">' + Math.round(ZOOM * 100) + "%</button>" +
     '<button data-zoom="in" title="vergroten">+</button>' +
     '<button data-zoom="fit" title="hele breedte in beeld">Passend</button>' +
+    '<button data-zoom="vol" title="de boom schermvullend; Esc sluit weer">Volledig scherm</button>' +
     "</div></div>";
   h += '<p class="boom-uitleg">Van jong (links) naar oud (rechts): elke vertakking zijn de ouders. ' +
     "Sleep om te verschuiven, Ctrl+scroll of de knoppen om te zoomen, en de ronde knop op een kaartje " +
@@ -519,7 +890,10 @@ function toonBoom(focusId, herstel) {
     for (const o of k.ouders) {
       const x2 = X(o), y2 = Y(o) + B.kh / 2;
       const buig = Math.max(24, (x2 - x1) / 2);
-      paden += '<path d="M' + x1 + " " + y1 + " C" + (x1 + buig) + " " + y1 + ", " +
+      // de lijn draagt de kleur van de tak waar hij naartoe loopt — dezelfde
+      // kleuren als de kaart en de monogrammen; spoken houden de neutrale lijn
+      const kleur = o.p ? ' style="stroke:' + lijnKleur(o.p.lijn) + '"' : "";
+      paden += '<path' + kleur + ' d="M' + x1 + " " + y1 + " C" + (x1 + buig) + " " + y1 + ", " +
         (x2 - buig) + " " + y2 + ", " + x2 + " " + y2 + '"/>';
     }
   }
@@ -536,17 +910,24 @@ function toonBoom(focusId, herstel) {
   // kaartjes
   for (const k of m.knopen) h += boomKaart(k, B, X(k), Y(k));
 
-  h += "</div></div></div>";
+  h += "</div>";
+  // zweeft alleen in de schermvullende stand in beeld: daar is de gewone
+  // zoombalk buiten het beeld gevallen, dus krijgt de boom er zelf een
+  h += '<div class="vol-balk">' +
+    '<button data-zoom="uit" title="verkleinen">−</button>' +
+    '<button data-zoom="reset" class="zoompct">' + Math.round(ZOOM * 100) + "%</button>" +
+    '<button data-zoom="in" title="vergroten">+</button>' +
+    '<button data-zoom="vol">Sluit volledig scherm</button></div>';
+  h += "</div></div>";
   inhoud.innerHTML = h;
 
   const vlak = document.getElementById("boomvlak");
   const canvas = document.getElementById("boomcanvas");
-  const pct = document.getElementById("zoompct");
 
   function zetZoom(z) {
     ZOOM = Math.min(1.6, Math.max(0.25, z));
     canvas.style.zoom = ZOOM;
-    pct.textContent = Math.round(ZOOM * 100) + "%";
+    inhoud.querySelectorAll(".zoompct").forEach(el => { el.textContent = Math.round(ZOOM * 100) + "%"; });
   }
   zetZoom(ZOOM);
 
@@ -554,6 +935,7 @@ function toonBoom(focusId, herstel) {
     if (b.dataset.zoom === "in") zetZoom(ZOOM * 1.2);
     else if (b.dataset.zoom === "uit") zetZoom(ZOOM / 1.2);
     else if (b.dataset.zoom === "fit") zetZoom((vlak.clientWidth - 24) / BOOM_BREEDTE);
+    else if (b.dataset.zoom === "vol") volledigScherm(vlak);
     else zetZoom(1);
   }));
 
@@ -590,6 +972,13 @@ function toonBoom(focusId, herstel) {
   if (herstel) {
     vlak.scrollLeft = herstel.l;
     vlak.scrollTop = herstel.t;
+  } else if (!focusId && m.knopen.length) {
+    // open niet op een leeg stuk canvas maar met de wortel (de jongste
+    // generatie) verticaal in beeld; de scrollmaat schaalt mee met de zoom
+    const wortel = m.knopen.find(k => k.p && m.wortels.some(w => w.id === k.id));
+    if (wortel) {
+      vlak.scrollTop = Math.max(0, (B.kop + wortel.rij * B.rij + B.kh / 2) * ZOOM - vlak.clientHeight / 2);
+    }
   }
 
   if (focusId) {
@@ -605,7 +994,8 @@ function toonBoom(focusId, herstel) {
 
 function persoonTegel(p) {
   let h = '<a class="p-tegel" href="' + persoonHash(p.id) + '">';
-  h += '<div class="p-tegel-kop"><strong>' + esc(p.naam) + "</strong>" + statusHtml(p.status) + "</div>";
+  h += '<div class="p-tegel-kop">' + monogramHtml(p, "pt-mono") +
+    "<strong>" + esc(p.naam) + "</strong>" + statusHtml(p.status) + "</div>";
   if (p.geboren) h += '<div class="p-regel"><span class="gd">*</span> ' + esc(p.geboren) + "</div>";
   if (p.overleden) h += '<div class="p-regel"><span class="gd">†</span> ' + esc(p.overleden) + "</div>";
   if (p.beroep) h += '<div class="p-regel"><span class="gd">&nbsp;</span> ' + esc(p.beroep) + "</div>";
@@ -718,7 +1108,7 @@ function toonPersonen() {
 
    De coördinaten per plaatsnaam staan in website/static/plaatsen.json; een
    woonplaats in een dossier mag een periode tussen haakjes dragen
-   ("Deventer (1843 - ca. 1865)") — die wordt eraf geknipt en in de lijst bij
+   ("Eesterga (1843 - ca. 1865)") — die wordt eraf geknipt en in de lijst bij
    de stip getoond. Filters: familielijnen (chips) en generatie (knoppenbalk
    met afspeelfunctie). Bij één gekozen generatie tonen open rondjes waar de
    ouders van die generatie woonden en lopen er stromende verhuislijnen van
@@ -750,7 +1140,7 @@ function kaartGens() {
     .map(p => +p.generatie))].sort((a, b) => b - a);
 }
 
-// "Deventer (1843 - ca. 1865)" -> naam "Deventer", periode "1843 - ca. 1865"
+// "Eesterga (1843 - ca. 1865)" -> naam "Eesterga", periode "1843 - ca. 1865"
 function woonplaatsDelen(w) {
   const m = /^(.*?)\s*\(([^)]*)\)\s*$/.exec(w);
   return m ? { naam: m[1].trim(), periode: m[2].trim() } : { naam: String(w).trim(), periode: "" };
@@ -772,7 +1162,7 @@ function plaatsCoord(naam) {
 }
 
 /* Een plaatsnaam uit een geboren-/overleden-veld halen:
-   "20-04-1790, Alphen aan den Rijn (gedoopt 25-04-1790)" -> Alphen aan den Rijn.
+   "20-04-1790, Koudekerk aan den Rijn (gedoopt 25-04-1790)" -> Koudekerk.
    Datums, "onbekend" en gemeentenamen zonder coördinaat vallen af; een
    voorvoegsel als "vermoedelijk" blijft als markering bewaard. */
 function plekUitVeld(veld) {
@@ -780,14 +1170,17 @@ function plekUitVeld(veld) {
   const zonderHaakjes = String(veld).replace(/\([^)]*\)/g, " ");
   for (let deel of zonderHaakjes.split(",")) {
     deel = deel.trim();
-    if (!deel || /^\d/.test(deel) || /^ca\.?\s*\d/i.test(deel)) continue;
-    if (/onbekend/i.test(deel)) continue;
+    if (!deel || /onbekend/i.test(deel)) continue;
     const vermoed = /^(vermoedelijk|waarschijnlijk|mogelijk)\s+/i.test(deel);
-    const naam = deel.replace(/^(vermoedelijk|waarschijnlijk|mogelijk)\s+/i, "")
-      .replace(/^(te|in)\s+/i, "")
-      .replace(/^onder\s+(de\s+stad\s+)?/i, "");
-    const c = plaatsCoord(naam);
-    if (c) return { plaats: c, vermoed };
+    // ook de tekst na " te " proberen: "waarschijnlijk 23-11-1808 te Koudekerk"
+    for (let naam of [deel, deel.split(/\s+te\s+/i).pop()]) {
+      naam = naam.replace(/^(vermoedelijk|waarschijnlijk|mogelijk)\s+/i, "")
+        .replace(/^(te|in)\s+/i, "")
+        .replace(/^onder\s+(de\s+stad\s+)?/i, "").trim();
+      if (!naam || /^\d/.test(naam) || /^ca\.?\s*\d/i.test(naam)) continue;
+      const c = plaatsCoord(naam);
+      if (c) return { plaats: c, vermoed };
+    }
   }
   return null;
 }
@@ -843,7 +1236,7 @@ function kaartModelMaken(gen) {
     if (!bogen.has(sleutel)) bogen.set(sleutel, { van, naar, lijn: p.lijn || "", n: 0, wie: [] });
     const boog = bogen.get(sleutel);
     boog.n++;
-    boog.wie.push({ naam: p.naam, soort });
+    boog.wie.push({ p, soort });
   };
 
   for (const p of kaartZichtbaar(gen)) {
@@ -884,16 +1277,23 @@ function kaartModelMaken(gen) {
 
 /* tooltip op een verhuislijn: de route, het aantal en wie er trokken */
 function boogTipHtml(b) {
-  let h = '<div class="kt-kop">' + esc(b.van.naam) + " → " + esc(b.naar.naam) +
+  let h = '<div class="kt-kop"><span class="kt-route">' + esc(b.van.naam) +
+    '<span class="kr-pijl">' + ikoon("pijl") + "</span>" + esc(b.naar.naam) + "</span>" +
     '<span class="kt-n">' + b.n + (b.n === 1 ? " verhuizing" : " verhuizingen") + "</span></div>";
+  const max = 8;
+  const markeer = new Set([b.van.naam, b.naar.naam]);
+  const kleur = lijnKleur(b.lijn);
+  h += '<div class="kt-groep" style="--kleur:' + kleur + '">';
   if (b.lijn) {
-    h += '<div class="kt-lijn"><span class="kt-bol" style="background:' + lijnKleur(b.lijn) + '"></span>' +
+    h += '<div class="kt-lijn"><span class="kt-bol" style="background:' + kleur + '"></span>' +
       esc(b.lijn) + "</div>";
   }
-  const max = 8;
   for (const w of b.wie.slice(0, max)) {
-    h += '<div class="kt-rij"><span>' + esc(w.naam) + "</span><span>" + esc(w.soort) + "</span></div>";
+    h += '<div class="kt-rij"><span class="kt-wie">' + esc(w.p.naam) + '</span><span class="kt-jaren">' +
+      esc(w.soort) + "</span></div>";
+    h += reisHtml(w.p, markeer);
   }
+  h += "</div>";
   if (b.wie.length > max) h += '<div class="kt-voet">en nog ' + (b.wie.length - max) + "</div>";
   return h;
 }
@@ -949,6 +1349,19 @@ function boogPunten(van, naar) {
   return punten;
 }
 
+/* de reis van één leven als ketting van plaatsjes met pijltjes ertussen:
+   geboorteplaats, woonplaatsen, sterfplaats. De plek(ken) waar de bezoeker
+   op zweeft lichten groen op, zodat je ziet waar deze stip of lijn in de
+   reis valt. Eén plek is geen reis: dan niets. */
+function reisHtml(p, markeer) {
+  const pad = levenspad(p);
+  if (pad.length < 2) return "";
+  return '<div class="kt-reis">' + pad.map(stap =>
+    '<span class="kr-stap' + (markeer.has(stap.plaats.naam) ? " hier" : "") + '">' +
+    esc(stap.plaats.naam) + "</span>")
+    .join('<span class="kr-pijl">' + ikoon("pijl") + "</span>") + "</div>";
+}
+
 function kaartTipHtml(stip, vast) {
   const perLijn = new Map();
   for (const r of stip.personen) {
@@ -958,20 +1371,30 @@ function kaartTipHtml(stip, vast) {
   }
   let h = '<div class="kt-kop">' + esc(stip.naam) + '<span class="kt-n">' + stip.personen.length +
     (stip.personen.length === 1 ? " persoon" : " personen") + "</span></div>";
+  // in de zweeflijst maximaal vijf personen — met reis en jaartallen erbij wordt
+  // een lange lijst anders een toren; de klik-lijst (vast) toont iedereen
+  const plafond = vast ? Infinity : 5;
+  const hier = new Set([stip.naam]);
   let getoond = 0, verborgen = 0;
   for (const [lijn, rijen] of [...perLijn.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
-    if (!vast && getoond >= 8) { verborgen += rijen.length; continue; }
-    h += '<div class="kt-lijn"><span class="kt-bol" style="background:' +
-      lijnKleur(lijn === "zonder lijn" ? "" : lijn) + '"></span>' + esc(lijn) + "</div>";
+    if (getoond >= plafond) { verborgen += rijen.length; continue; }
+    const kleur = lijnKleur(lijn === "zonder lijn" ? "" : lijn);
+    h += '<div class="kt-groep" style="--kleur:' + kleur + '">';
+    h += '<div class="kt-lijn"><span class="kt-bol" style="background:' + kleur + '"></span>' +
+      esc(lijn) + "</div>";
     rijen.sort((a, b) => (+b.p.generatie || 0) - (+a.p.generatie || 0) || a.p.naam.localeCompare(b.p.naam));
     for (const r of rijen) {
-      if (!vast && getoond >= 8) { verborgen++; continue; }
+      if (getoond >= plafond) { verborgen++; continue; }
       getoond++;
-      const sub = ["generatie " + r.p.generatie, jarenVan(r.p), r.periodes.join("; ")]
-        .filter(Boolean).join(" · ");
+      const jaren = jarenVan(r.p);
       h += '<div class="kt-rij"><a href="' + persoonHash(r.p.id) + '">' + esc(r.p.naam) + "</a>" +
-        (sub ? "<span>" + esc(sub) + "</span>" : "") + "</div>";
+        (jaren ? '<span class="kt-jaren">' + esc(jaren) + "</span>" : "") + "</div>";
+      const sub = [r.p.generatie !== "" ? "generatie " + r.p.generatie : "", r.periodes.join("; ")]
+        .filter(Boolean).join(" · ");
+      if (sub) h += '<div class="kt-sub">' + esc(sub) + "</div>";
+      h += reisHtml(r.p, hier);
     }
+    h += "</div>";
   }
   if (verborgen) h += '<div class="kt-voet">nog ' + verborgen + " — klik op de stip voor de hele lijst</div>";
   else h += '<div class="kt-voet">' + (vast ? "klik op een naam voor het dossier"
@@ -1158,7 +1581,8 @@ async function toonKaart(genArg) {
   h += '<p class="uitleg">Elke stip is een plek uit de dossiers — woonplaats, geboorteplaats of sterfplaats; ' +
     "één bekende plek is genoeg om op de kaart te staan, en het etiket in de lijst zegt wat de plek betekent " +
     "(geboren hier, overleden hier, of de woonjaren). Hoe groter de stip, hoe meer voorouders; de kleur is de " +
-    "familielijn. Zweef over een stip om te zien wie, klik voor de lijst met dossierlinks. De stromende lijnen " +
+    "familielijn. Zweef over een stip om te zien wie — wie verhuisde krijgt daar zijn hele reis bij, met deze " +
+    "plek vetgedrukt — en klik voor de lijst met dossierlinks. De stromende lijnen " +
     "zijn de verhuizingen — binnen een leven én van ouder naar kind; zweef erover om te zien wie er trokken. " +
     "Kies een generatie om de familie door de tijd te volgen, of laat de generaties afspelen. " +
     'Plaatscoördinaten staan in <a href="' + verkennerHash("website/static/plaatsen.json") + '">plaatsen.json</a>; ' +
@@ -1166,9 +1590,10 @@ async function toonKaart(genArg) {
   h += '<div class="werkbalk kaart-balk"><div class="k-chips" id="k-chips"></div>' +
     '<span class="teller" id="k-teller"></span></div>';
   h += '<div class="k-genbalk" id="k-genwrap"></div>';
-  h += '<div class="kaart-vlak"><div id="kaartdoek"></div>' +
+  h += '<div class="kaart-vlak" id="kaartvlak"><div id="kaartdoek"></div>' +
     '<div class="kaart-zoom"><button data-kzoom="fit" title="alle stippen in beeld">Passend</button>' +
-    '<button data-kzoom="nl" title="heel Nederland">NL</button></div>' +
+    '<button data-kzoom="nl" title="heel Nederland">NL</button>' +
+    '<button data-kzoom="vol" title="de kaart schermvullend; Esc sluit weer">Volledig scherm</button></div>' +
     '<div id="kaart-offline" class="kaart-melding" hidden>Geen verbinding met de kaartserver — ' +
     "de achtergrondkaart ontbreekt, maar de stippen en filters werken gewoon.</div>" +
     '<div id="kaart-leeg" class="kaart-melding kaart-leeg" hidden>Geen personen binnen de gekozen lijnen en generatie.</div></div>';
@@ -1211,6 +1636,7 @@ async function toonKaart(genArg) {
     if (e.target.closest("#k-verhuis")) { FILTER_K.verhuis = !FILTER_K.verhuis; werkKaartBij(); return; }
     const zoomKnop = e.target.closest("[data-kzoom]");
     if (zoomKnop && KAART_MAP) {
+      if (zoomKnop.dataset.kzoom === "vol") { volledigScherm(document.getElementById("kaartvlak")); return; }
       if (zoomKnop.dataset.kzoom === "nl") { KAART_MAP.flyTo([52.2, 5.35], 7, { duration: 0.7 }); return; }
       const punten = KAART_MODEL
         ? [...KAART_MODEL.stippen.values(), ...KAART_MODEL.spoken.values()].map(s => [s.lat, s.lon]) : [];
@@ -1222,6 +1648,15 @@ async function toonKaart(genArg) {
 }
 
 /* ------------------------------------------------------------------ tijdsbeeld */
+
+/* Eén etiket met een rij namen erachter. Vroeger kreeg elke naam zijn eigen
+   "raakt" of "personen" ervoor — bij twaalf gekoppelde personen stond het woord
+   twaalf keer in de kop en verdronken de namen erin. */
+function relatieGroep(label, items) {
+  if (!items || !items.length) return "";
+  return '<div class="relaties"><span class="rol">' + esc(label) + "</span>" +
+    '<span class="relatie-lijst">' + items.join('<span class="scheider">·</span>') + "</span></div>";
+}
 
 function gebeurtenisPersonen(g) {
   return g.personen.map(id => {
@@ -1266,29 +1701,27 @@ async function toonGebeurtenis(id) {
   }
   inhoud.innerHTML = '<p class="laadtekst">Gebeurtenis laden…</p>';
   const tekst = await fetch(bestandUrl(g.bestand)).then(r => r.text());
-  const { html } = mdRender(tekst, "tijdsbeeld");
+  const { html, kopjes } = mdRender(tekst, "tijdsbeeld");
 
   let kop = '<div class="info-kaart">';
-  kop += '<div class="info-kop"><h2>' + esc(g.titel) + "</h2>" + statusBadge(g.status) + "</div>";
+  kop += '<div class="info-kop"><h2>' + esc(g.titel) + "</h2>" + statusBadge(g.status) +
+    leestijdChip(tekst) + "</div>";
   kop += '<div class="info-rooster">';
   kop += "<div><span>periode</span>" + esc(g.periode) + "</div>";
   if (g.soort) kop += "<div><span>soort</span>" + esc(g.soort) + "</div>";
   if (g.plaatsen.length) kop += "<div><span>plaatsen</span>" + esc(g.plaatsen.join(", ")) + "</div>";
   if (g.landing) kop += "<div><span>landing</span>" + esc(g.landing) + "</div>";
   kop += "</div>";
-  const pers = gebeurtenisPersonen(g);
-  if (pers.length) {
-    kop += '<div class="relaties">' +
-      pers.map(p => '<div class="relatie"><span class="rol">raakt</span> ' + p + "</div>").join("") + "</div>";
-  }
+  kop += relatieGroep("raakt", gebeurtenisPersonen(g));
   kop += '<div class="held-acties">' + pdfKnop("tijdsbeeld", g.id, true) + "</div>";
   kop += '<div class="info-voet">bron: <a href="' + verkennerHash(g.bestand) + '">' + esc(g.bestand) + "</a></div>";
   kop += "</div>";
 
-  inhoud.innerHTML = '<div class="paneel">' +
+  inhoud.innerHTML = '<div class="paneel lees">' +
     '<a class="terug" href="#/tijdsbeeld">← alle gebeurtenissen</a>' +
-    kop + '<article class="md">' + html + "</article></div>";
+    kop + leeslaag(html, kopjes) + "</div>";
   koppelPdfKnoppen();
+  werkLeespaginaBij();
 }
 
 /* De twee "queries" onderaan een dossier: in welke tijdsbeeld-gebeurtenissen
@@ -1508,11 +1941,12 @@ async function toonVerhaal(id) {
   }
   inhoud.innerHTML = '<p class="laadtekst">Verhaal laden…</p>';
   const tekst = await fetch(bestandUrl(v.bestand)).then(r => r.text());
-  const { html } = mdRender(tekst, "boek/verhalen");
+  const { html, kopjes } = mdRender(tekst, "boek/verhalen");
 
   let kop = '<div class="info-kaart">';
   kop += '<div class="info-kop"><h2>' + esc(v.titel) + "</h2>" +
-    '<span class="chip" title="hoe bijzonder (1-20)">' + (v.score != null ? v.score : "?") + "/20</span></div>";
+    '<span class="chip" title="hoe bijzonder (1-20)">' + (v.score != null ? v.score : "?") + "/20</span>" +
+    leestijdChip(tekst) + "</div>";
   kop += '<div class="info-rooster">';
   if (v.periode) kop += "<div><span>periode</span>" + esc(v.periode) + "</div>";
   if (v.rubriek) kop += "<div><span>rubriek</span>" + esc(v.rubriek) + "</div>";
@@ -1525,18 +1959,16 @@ async function toonVerhaal(id) {
       ? '<a class="wikilink" href="' + persoonHash(pid) + '">' + esc(p.naam) + "</a>"
       : '<span class="wikilink ontbreekt" title="nog geen dossier">' + esc(pid) + "</span>";
   });
-  if (pers.length) {
-    kop += '<div class="relaties">' +
-      pers.map(p => '<div class="relatie"><span class="rol">personen</span> ' + p + "</div>").join("") + "</div>";
-  }
+  kop += relatieGroep(pers.length === 1 ? "persoon" : "personen", pers);
   kop += '<div class="held-acties">' + pdfKnop("verhaal", v.id, true) + "</div>";
   kop += '<div class="info-voet">bron: <a href="' + verkennerHash(v.bestand) + '">' + esc(v.bestand) + "</a></div>";
   kop += "</div>";
 
-  inhoud.innerHTML = '<div class="paneel">' +
+  inhoud.innerHTML = '<div class="paneel lees">' +
     '<a class="terug" href="#/verhalen">← alle verhalen</a>' +
-    kop + '<article class="md">' + html + "</article></div>";
+    kop + leeslaag(html, kopjes, "verhaal-lees") + "</div>";
   koppelPdfKnoppen();
+  werkLeespaginaBij();
 }
 
 /* ------------------------------------------------------------- persoonsdossier */
@@ -1545,9 +1977,10 @@ function familieKaart(id, rol) {
   if (!id) return "";
   const p = PERSOON_MAP[id];
   if (p) {
-    return '<a class="fkaart" href="' + persoonHash(id) + '"><span class="rol">' + esc(rol) + "</span>" +
+    return '<a class="fkaart" href="' + persoonHash(id) + '">' + monogramHtml(p, "fk-mono") +
+      '<span class="fk-tekst"><span class="rol">' + esc(rol) + "</span>" +
       '<span class="fk-naam">' + esc(p.naam) + "</span>" +
-      '<span class="fk-jaren">' + (esc(jarenVan(p)) || "&nbsp;") + "</span></a>";
+      '<span class="fk-jaren">' + (esc(jarenVan(p)) || "&nbsp;") + "</span></span></a>";
   }
   return '<span class="fkaart spook" title="nog geen dossier"><span class="rol">' + esc(rol) + "</span>" +
     '<span class="fk-naam">' + esc(id) + '</span><span class="fk-jaren">nog geen dossier</span></span>';
@@ -1607,10 +2040,15 @@ async function toonPersoon(id) {
   inhoud.innerHTML = '<p class="laadtekst">Dossier laden…</p>';
   const antwoord = await fetch(bestandUrl(p.bestand));
   const tekst = await antwoord.text();
-  const { html } = mdRender(tekst, padOuder(p.bestand));
+  const { html, kopjes } = mdRender(tekst, padOuder(p.bestand));
 
+  const leeftijd = leeftijdVan(p);
   let kop = '<div class="held rand-' + statusKlasse(p.status) + '">';
-  kop += '<div class="held-kop"><h2>' + esc(p.naam) + "</h2>" + statusBadge(p.status) + "</div>";
+  kop += '<div class="held-kop">' + monogramHtml(p, "held-mono") +
+    "<h2>" + esc(p.naam) + "</h2>" +
+    (jarenVan(p) ? '<span class="held-jaren">' + esc(jarenVan(p)) +
+      (leeftijd ? ' <span class="held-leeftijd">· ' + esc(leeftijd) + "</span>" : "") + "</span>" : "") +
+    statusBadge(p.status) + "</div>";
   kop += '<div class="held-feiten">';
   if (p.geboren) kop += "<div><span>geboren</span>* " + esc(p.geboren) + "</div>";
   if (p.overleden) kop += "<div><span>overleden</span>† " + esc(p.overleden) + "</div>";
@@ -1634,14 +2072,15 @@ async function toonPersoon(id) {
   const familie = familieKaart(p.vader, "vader") + familieKaart(p.moeder, "moeder") +
     familieKaart(p.partner, "partner") + p.kinderen.map(k => familieKaart(k, "kind")).join("");
 
-  inhoud.innerHTML = '<div class="paneel">' +
+  inhoud.innerHTML = '<div class="paneel lees">' +
     '<a class="terug" href="javascript:history.back()">← terug</a>' +
     kop +
     (familie ? '<div class="familie">' + familie + "</div>" : "") +
     documentGalerij(p.id) +
-    '<article class="md">' + html + "</article>" +
+    leeslaag(html, kopjes) +
     verhalenStrip(p.id) + tijdsbeeldStrip(p.id) + "</div>";
   koppelPdfKnoppen();
+  werkLeespaginaBij();
 }
 
 /* ------------------------------------------------------------------ verkenner */
@@ -1690,9 +2129,9 @@ async function bestandWeergave(pad) {
     }
     if (mdKnoop) {
       const tekst = await fetch(bestandUrl(mdPad)).then(r => r.text());
-      const { html, frontmatter } = mdRender(tekst, padOuder(mdPad));
+      const { html, frontmatter, kopjes } = mdRender(tekst, padOuder(mdPad));
       h += '<div class="beschrijving"><h3>Transcriptie &amp; bronvermelding</h3>' +
-           frontmatterTabel(frontmatter) + '<article class="md">' + html + "</article></div>";
+           frontmatterTabel(frontmatter) + leeslaag(html, kopjes, "strip-alleen") + "</div>";
     }
     return h;
   }
@@ -1703,8 +2142,10 @@ async function bestandWeergave(pad) {
   if (/\.(md|txt|py|cmd|json|gitignore)$/i.test(naam) || !/\./.test(naam)) {
     const tekst = await fetch(bestandUrl(pad)).then(r => r.text());
     if (/\.md$/i.test(naam)) {
-      const { html, frontmatter } = mdRender(tekst, padOuder(pad));
-      return kruimels + frontmatterTabel(frontmatter) + '<article class="md">' + html + "</article>";
+      // in de verkenner staat links al een bestandsboom; de inhoudsopgave komt
+      // hier daarom als strip bovenaan en niet als tweede kolom ernaast
+      const { html, frontmatter, kopjes } = mdRender(tekst, padOuder(pad));
+      return kruimels + frontmatterTabel(frontmatter) + leeslaag(html, kopjes, "strip-alleen");
     }
     return kruimels + '<pre class="codeblok">' + esc(tekst) + "</pre>";
   }
@@ -1736,6 +2177,7 @@ async function toonVerkenner(selectiePad) {
     }
     const actief = inhoud.querySelector(".v-boom a.actief");
     if (actief) actief.scrollIntoView({ block: "center" });
+    werkLeespaginaBij();
   }
 }
 
@@ -1758,8 +2200,9 @@ function bouwSuggesties() {
   const top = treffers.slice(0, 8);
   SUG_IDX = -1;
   let h = top.map(p =>
-    '<a class="zoek-item" href="' + persoonHash(p.id) + '"><strong>' + esc(p.naam) + "</strong>" +
-    "<span>" + esc([jarenVan(p), p.beroep, p.lijn].filter(Boolean).join(" · ")) + "</span></a>").join("");
+    '<a class="zoek-item" href="' + persoonHash(p.id) + '">' + monogramHtml(p, "zs-mono") +
+    '<span class="zi-tekst"><strong>' + esc(p.naam) + "</strong>" +
+    "<span>" + esc([jarenVan(p), p.beroep, p.lijn].filter(Boolean).join(" · ")) + "</span></span></a>").join("");
   if (!treffers.length) {
     h = '<span class="zoek-leeg">Geen persoon gevonden voor “' + esc(ZOEKTERM) + "”</span>";
   } else {
@@ -1801,6 +2244,16 @@ zoekveld.addEventListener("keydown", e => {
 zoekveld.addEventListener("focus", () => { if (ZOEKTERM && !/^#\/personen/.test(location.hash)) bouwSuggesties(); });
 document.addEventListener("click", e => { if (!e.target.closest(".zoekdoos")) verbergSuggesties(); });
 
+// de sneltoets van elke leeswebsite: "/" springt naar het zoekveld
+document.addEventListener("keydown", e => {
+  if (e.key !== "/" || e.ctrlKey || e.metaKey || e.altKey) return;
+  const doel = e.target;
+  if (doel && (doel.tagName === "INPUT" || doel.tagName === "TEXTAREA" || doel.tagName === "SELECT" || doel.isContentEditable)) return;
+  e.preventDefault();
+  zoekveld.focus();
+  zoekveld.select();
+});
+
 /* ------------------------------------------------------------------ zweefkaart
    Wie over een link naar een persoon, gebeurtenis of verhaal zweeft, krijgt na
    een korte pauze een voorproefje: naam, jaren, beroep, plaatsen. Alles komt
@@ -1826,16 +2279,29 @@ function zkRegel(html) {
   return html ? '<div class="zk-regel">' + html + "</div>" : "";
 }
 
+/* één regel in de feiten-grid van de persoonszweefkaart: piepklein etiket
+   links, de waarde rechts. Lege waarden verdwijnen geruisloos. */
+function zweefFeit(label, inhoudHtml) {
+  if (!inhoudHtml) return "";
+  return '<div class="zk-feit"><span>' + label + "</span><div>" + inhoudHtml + "</div></div>";
+}
+
 function zweefPersoon(p) {
   let h = '<div class="zk-soort">persoon</div>';
   h += '<div class="zk-kop">' + esc(p.naam) + statusHtml(p.status) + "</div>";
-  if (p.geboren) h += zkRegel('<span class="gd">*</span> ' + esc(p.geboren));
-  if (p.overleden) h += zkRegel('<span class="gd">†</span> ' + esc(p.overleden));
-  if (p.beroep) h += zkRegel('<span class="gd">&nbsp;</span> ' + esc(p.beroep));
-  if ((p.woonplaatsen || []).length) h += zkRegel("woonde in " + esc(p.woonplaatsen.join("; ")));
   const ouders = [p.vader, p.moeder].filter(Boolean).map(persoonNaamVan);
-  if (ouders.length) h += zkRegel("ouders: " + esc(ouders.join(" en ")));
-  if (p.partner) h += zkRegel("partner: " + esc(persoonNaamVan(p.partner)));
+  // de reis van dit leven (geboorteplaats, woonplaatsen, sterfplaats);
+  // vraagt plaatsen.json, dat start() alvast meelaadt
+  const reis = PLAATSEN_GIDS ? reisHtml(p, new Set()) : "";
+  h += '<div class="zk-feiten">' +
+    zweefFeit("geboren", p.geboren ? esc(p.geboren) : "") +
+    zweefFeit("overleden", p.overleden ? esc(p.overleden) : "") +
+    zweefFeit("beroep", p.beroep ? esc(p.beroep) : "") +
+    zweefFeit("woonde", (p.woonplaatsen || []).length ? esc(p.woonplaatsen.join("; ")) : "") +
+    zweefFeit("reis", reis) +
+    zweefFeit("ouders", ouders.length ? esc(ouders.join(" en ")) : "") +
+    zweefFeit("partner", p.partner ? esc(persoonNaamVan(p.partner)) : "") +
+    "</div>";
   let voet = "";
   if (p.lijn) voet += '<span class="chip">' + esc(p.lijn) + "</span>";
   if (p.generatie !== "" && generatieTerm(+p.generatie)) {
@@ -1905,14 +2371,27 @@ function plaatsZweefkaart(anker, html) {
 // alleen op apparaten met een echte muisaanwijzer; op een tablet stoort het
 if (window.matchMedia("(hover: hover)").matches) {
   document.addEventListener("mouseover", e => {
-    const a = e.target.closest ? e.target.closest('a[href^="#/"]') : null;
-    if (!a || a === ZWEEF_ANKER) return;
+    if (!e.target.closest) return;
+    const anker = e.target.closest('a[href^="#/"], .vn-ref button');
+    if (!anker || anker === ZWEEF_ANKER) return;
     verbergZweefkaart();
-    if (a.matches(".p-tegel, .v-kaart, .tb-kaart, .zoek-item")) return;
-    const html = zweefInhoud(a.getAttribute("href"));
+    let html = "";
+    if (anker.matches(".vn-ref button")) {
+      // de voetnoot als voorproefje op de plek waar je leest, in plaats van
+      // eerst naar de onderkant van de pagina te moeten springen
+      const noot = document.getElementById(anker.dataset.naar || "");
+      if (!noot) return;
+      const kopie = noot.cloneNode(true);
+      kopie.querySelectorAll(".vn-terug").forEach(b => b.remove());
+      html = '<div class="zk-soort">voetnoot ' + esc(noot.getAttribute("value") || "") + "</div>" +
+        '<div class="zk-vn">' + kopie.innerHTML + "</div>";
+    } else {
+      if (anker.matches(".p-tegel, .v-kaart, .tb-kaart, .zoek-item")) return;
+      html = zweefInhoud(anker.getAttribute("href"));
+    }
     if (!html) return;
-    ZWEEF_ANKER = a;
-    ZWEEF_TIMER = setTimeout(() => plaatsZweefkaart(a, html), 350);
+    ZWEEF_ANKER = anker;
+    ZWEEF_TIMER = setTimeout(() => plaatsZweefkaart(anker, html), 350);
   });
   document.addEventListener("mouseout", e => {
     if (ZWEEF_ANKER && !ZWEEF_ANKER.contains(e.relatedTarget)) verbergZweefkaart();
@@ -1920,6 +2399,275 @@ if (window.matchMedia("(hover: hover)").matches) {
   document.addEventListener("pointerdown", verbergZweefkaart, true);
   document.addEventListener("scroll", verbergZweefkaart, true);
   window.addEventListener("hashchange", verbergZweefkaart);
+}
+
+/* ------------------------------------------------------------------ cijfers
+   Het onderzoek in getallen, live gerekend uit de geladen dossiers. Alle
+   kleuren zijn de vaste entiteitskleuren van de site (lijnen, statussen), en
+   elke balk of staaf draagt zijn eigen label en aantal in gewone tekst —
+   niemand hoeft kleuren uit elkaar te houden om de cijfers te kunnen lezen. */
+
+function toonCijfers() {
+  const nuJaar = new Date().getFullYear();
+  const jaartal = veld => { const m = /(\d{4})/.exec(veld || ""); return m ? +m[1] : null; };
+
+  const gens = PERSONEN.map(p => +p.generatie).filter(g => !isNaN(g));
+  const diepst = gens.length ? Math.max(...gens) : 0;
+  const docs = PERSONEN.reduce((s, p) => s + (+p.documenten || 0), 0);
+  const geboortes = PERSONEN.map(p => ({ p, j: jaartal(p.geboren) })).filter(r => r.j);
+  const oudste = geboortes.length ? geboortes.reduce((a, b) => (a.j <= b.j ? a : b)) : null;
+
+  const perLijn = new Map();
+  for (const p of PERSONEN) { const l = p.lijn || ""; perLijn.set(l, (perLijn.get(l) || 0) + 1); }
+  const lijnRijen = [...perLijn.entries()].sort((a, b) => b[1] - a[1]);
+  const lijnMax = Math.max(1, ...lijnRijen.map(r => r[1]));
+
+  const statusTelling = {};
+  for (const p of PERSONEN) if (p.status) statusTelling[p.status] = (statusTelling[p.status] || 0) + 1;
+
+  const perGen = new Map();
+  for (const g of gens) perGen.set(g, (perGen.get(g) || 0) + 1);
+  const genRijen = [...perGen.entries()].sort((a, b) => a[0] - b[0]);
+  const genMax = Math.max(1, ...genRijen.map(r => r[1]));
+
+  const metLeeftijd = PERSONEN.map(p => {
+    const g = jaartal(p.geboren), o = jaartal(p.overleden);
+    return g && o && o >= g && o - g <= 115 ? { p, n: o - g } : null;
+  }).filter(Boolean);
+  const oudsteMens = metLeeftijd.length ? metLeeftijd.reduce((a, b) => (a.n >= b.n ? a : b)) : null;
+
+  const tel = (kaart, sleutel) => { if (sleutel) kaart.set(sleutel, (kaart.get(sleutel) || 0) + 1); };
+  const voornamen = new Map();
+  for (const p of PERSONEN) {
+    const v = String(p.naam).split(/\s+/)[0];
+    if (v && v.length > 1) tel(voornamen, v);
+  }
+  const beroepen = new Map();
+  for (const p of PERSONEN) {
+    for (let b of String(p.beroep || "").split(/[,;\/]|\ben later\b|\blater\b/)) {
+      b = b.trim().toLowerCase();
+      if (!b || b === "onbekend" || b === "zonder beroep") continue;
+      tel(beroepen, b);
+    }
+  }
+  const plaatsen = new Map();
+  for (const p of PERSONEN) {
+    for (const w of (p.woonplaatsen || [])) {
+      if (!w || w === "[]") continue;
+      tel(plaatsen, woonplaatsDelen(w).naam);
+    }
+  }
+  const top = (kaart, n) => [...kaart.entries()].sort((a, b) => b[1] - a[1]).slice(0, n);
+  const topDocs = [...PERSONEN].filter(p => p.documenten)
+    .sort((a, b) => b.documenten - a.documenten).slice(0, 3);
+
+  const persoonLink = p => '<a class="wikilink" href="' + persoonHash(p.id) + '">' + esc(p.naam) + "</a>";
+  const record = (etiket, inhoudHtml, sub) =>
+    '<div class="c-record"><span class="rol">' + esc(etiket) + "</span>" +
+    '<div class="c-record-wat">' + inhoudHtml + "</div>" +
+    (sub ? '<div class="c-record-sub">' + sub + "</div>" : "") + "</div>";
+
+  let h = '<div class="paneel cijfers"><h2>Cijfers — het onderzoek in getallen</h2>';
+  h += '<p class="uitleg">Alles op deze pagina wordt live uit de dossiers gerekend' +
+    (TAK_TITEL ? ", binnen de weergave " + esc(TAK_TITEL) : "") +
+    ". Verandert er morgen een dossier, dan veranderen deze cijfers mee.</p>";
+
+  h += '<div class="hero-tegels c-tegels">' +
+    heroTegel(PERSONEN.length, "voorouders") +
+    heroTegel(diepst + (gens.some(g => g < 0) ? 2 : 1), "generaties") +
+    (oudste ? heroTegel(nuJaar - oudste.j, "jaar terug in de tijd") : "") +
+    heroTegel(docs, "gescande documenten") +
+    heroTegel(VERHALEN.length, "verhalen") +
+    heroTegel(TIJDSBEELD.length, "gebeurtenissen") +
+    "</div>";
+
+  h += '<section class="c-blok"><h3>Voorouders per familielijn</h3><div class="c-balken">';
+  for (const [l, n] of lijnRijen) {
+    h += '<div class="c-rij"><span class="c-label">' + esc(l || "zonder lijn") + "</span>" +
+      '<span class="c-baan"><span class="c-vul" style="width:' + (n / lijnMax * 100).toFixed(1) +
+      "%;background:" + lijnKleur(l) + '"></span></span>' +
+      '<span class="c-n">' + n + "</span></div>";
+  }
+  h += "</div></section>";
+
+  const statusTotaal = ["✓", "◐", "?", "⚠"].reduce((s, k) => s + (statusTelling[k] || 0), 0);
+  if (statusTotaal) {
+    h += '<section class="c-blok"><h3>Hoe hard het bewijs is</h3><div class="c-status">';
+    for (const s of ["✓", "◐", "?", "⚠"]) {
+      const n = statusTelling[s] || 0;
+      if (!n) continue;
+      h += '<span class="c-seg cs-' + statusKlasse(s) + '" style="flex-grow:' + n +
+        '" title="' + esc(STATUS_WOORD[s]) + ": " + n + '"></span>';
+    }
+    h += "</div><div class='c-statuslegenda'>";
+    for (const s of ["✓", "◐", "?", "⚠"]) {
+      const n = statusTelling[s] || 0;
+      if (!n) continue;
+      h += '<span class="c-legchip"><span class="status s-' + statusKlasse(s) + '">' + s + "</span> " +
+        esc(STATUS_WOORD[s]) + ' <span class="c-n">' + n + "</span></span>";
+    }
+    h += "</div></section>";
+  }
+
+  if (genRijen.length) {
+    h += '<section class="c-blok"><h3>Voorouders per generatie</h3><div class="c-kolommen">';
+    for (const [g, n] of genRijen) {
+      const term = generatieTerm(g);
+      h += '<div class="c-kolom" title="generatie ' + g + (term ? " (" + esc(term) + ")" : "") + ": " + n + '">' +
+        '<span class="c-kn">' + n + "</span>" +
+        '<span class="c-staaf" style="height:' + Math.max(4, Math.round(n / genMax * 110)) + 'px"></span>' +
+        '<span class="c-kg">' + g + "</span></div>";
+    }
+    h += '</div><p class="c-voetnoot">Generatie 0 is de persoon waar de telling begint; hoe hoger het nummer, hoe verder terug in de tijd.</p></section>';
+  }
+
+  h += '<section class="c-blok"><h3>Records</h3><div class="c-records">';
+  if (oudste) {
+    h += record("Verste spoor", persoonLink(oudste.p),
+      "geboren rond " + oudste.j + ", zo'n " + (nuJaar - oudste.j) + " jaar geleden");
+  }
+  if (oudsteMens) {
+    h += record("Langste leven", persoonLink(oudsteMens.p), "ongeveer " + oudsteMens.n + " jaar oud geworden");
+  }
+  if (topDocs.length) {
+    h += record("Dikste dossier", topDocs.map(persoonLink).join(" · "),
+      topDocs.map(p => p.documenten + " doc.").join(" · "));
+  }
+  h += record("Diepste generatie", "generatie " + diepst,
+    esc(generatieTerm(diepst) || "") || "");
+  h += "</div></section>";
+
+  const woordenblok = (kop, rijen, eenheid) => {
+    if (!rijen.length) return "";
+    return '<div class="c-woorden"><h4>' + esc(kop) + "</h4><div class='c-chips'>" +
+      rijen.map(([w, n]) => '<span class="chip chip-stil">' + esc(w) +
+        ' <span class="c-n">' + n + "</span></span>").join("") + "</div></div>";
+  };
+  h += '<section class="c-blok"><h3>De familie in woorden</h3><div class="c-woordenrij">' +
+    woordenblok("Meest voorkomende voornamen", top(voornamen, 8)) +
+    woordenblok("Beroepen", top(beroepen, 8)) +
+    woordenblok("Woonplaatsen", top(plaatsen, 8)) +
+    "</div></section>";
+
+  h += "</div>";
+  inhoud.innerHTML = h;
+}
+
+/* ------------------------------------------------------------- takkenfilter */
+
+/* Een persoon plus alle voorouders daarboven, geklommen langs vader/moeder. */
+function voorouderSet(anker) {
+  const set = new Set();
+  const klim = id => {
+    const p = id && PERSOON_MAP[id];
+    if (!p || set.has(id)) return;
+    set.add(id);
+    klim(p.vader);
+    klim(p.moeder);
+  };
+  klim(anker);
+  return set;
+}
+
+/* Leest ?tak=… uit de URL en snijdt de geladen lijsten erop toe. De site doet
+   daarna alsof alleen deze dossiers bestaan: wat buiten de tak valt, verschijnt
+   nergens — ook niet in de zoeksuggesties of op de kaart. Een verhaal of
+   gebeurtenis blijft staan als hij iemand uit de tak raakt (gekoppeld of in de
+   tekst genoemd), een verhaal ook als zijn familielijn binnen de tak valt. */
+function pasTakToe() {
+  TAK = new URLSearchParams(location.search).get("tak") || "";
+  if (!TAK) return;
+  let set = null;
+  const mLijn = /^lijn:(.+)$/.exec(TAK);
+  if (TAKKEN[TAK] && PERSOON_MAP[TAKKEN[TAK].anker]) {
+    set = voorouderSet(TAKKEN[TAK].anker);
+    TAK_TITEL = TAKKEN[TAK].naam.toLowerCase();
+  } else if (mLijn && PERSONEN.some(p => p.lijn === mLijn[1])) {
+    set = new Set(PERSONEN.filter(p => p.lijn === mLijn[1]).map(p => p.id));
+    TAK_TITEL = "lijn " + mLijn[1];
+  } else {
+    TAK = "";   // onbekende of lege tak: gewoon alles tonen
+    return;
+  }
+  PERSONEN = PERSONEN.filter(p => set.has(p.id));
+  PERSOON_MAP = Object.fromEntries(PERSONEN.map(p => [p.id, p]));
+  const lijnen = new Set(PERSONEN.map(p => p.lijn).filter(Boolean));
+  const raakt = x => (x.personen || []).some(id => set.has(id)) ||
+    (x.genoemd || []).some(id => set.has(id));
+  TIJDSBEELD = TIJDSBEELD.filter(raakt);
+  VERHALEN = VERHALEN.filter(v => raakt(v) || (v.lijn && lijnen.has(v.lijn)));
+  GEBEURTENIS_MAP = Object.fromEntries(TIJDSBEELD.map(g => [g.id, g]));
+  VERHAAL_MAP = Object.fromEntries(VERHALEN.map(v => [v.id, v]));
+  document.title = (INSTELLINGEN.titel || "Stamboom") + " — " + TAK_TITEL;
+}
+
+/* Dezelfde pagina, maar met een andere tak in de query (de hash blijft staan). */
+function takUrl(waarde) {
+  const url = new URL(location.href);
+  if (waarde) url.searchParams.set("tak", waarde);
+  else url.searchParams.delete("tak");
+  return url.toString();
+}
+
+/* Kopieert de volledige URL (mét tak en hash) — dat is de deelbare link.
+   navigator.clipboard bestaat alleen op https/localhost; op een netwerkadres
+   (http://192.168.…) valt dit terug op het oude execCommand-kopiëren. */
+async function kopieerLink(knop) {
+  const url = location.href;
+  let gelukt = false;
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(url);
+      gelukt = true;
+    }
+  } catch (fout) { /* val terug op het tekstveld hieronder */ }
+  if (!gelukt) {
+    const veld = document.createElement("textarea");
+    veld.value = url;
+    veld.style.position = "fixed";
+    veld.style.opacity = "0";
+    document.body.appendChild(veld);
+    veld.select();
+    try { gelukt = document.execCommand("copy"); } catch (fout) { gelukt = false; }
+    veld.remove();
+  }
+  const oud = knop.innerHTML;
+  knop.innerHTML = gelukt ? "Gekopieerd — plak hem in een bericht" : esc(url);
+  setTimeout(() => { knop.innerHTML = oud; }, 2600);
+}
+
+function toonTakbalk() {
+  const balk = document.getElementById("takbalk");
+  if (!balk) return;
+  let h = '<span class="tak-etiket">Weergave</span>';
+  h += '<a class="tak-knop' + (!TAK ? " aan" : "") + '" href="' + esc(takUrl("")) +
+    '" title="alle lijnen en generaties">Hele stamboom</a>';
+  for (const sleutel of TAK_KEUZES) {
+    const tak = TAKKEN[sleutel];
+    h += '<a class="tak-knop' + (TAK === sleutel ? " aan" : "") + '" href="' + esc(takUrl(sleutel)) +
+      '" title="' + esc(tak.uitleg) + '">' + esc(tak.naam) + "</a>";
+  }
+  const actieveLijn = /^lijn:(.+)$/.exec(TAK);
+  // binnen een kant toont de keuzelijst alleen de lijnen die eronder vallen
+  const lijnKeuzes = TAKKEN[TAK]
+    ? [...new Set(PERSONEN.map(p => p.lijn).filter(Boolean))].sort()
+    : LIJNEN_VOL;
+  h += '<select id="tak-lijn" title="één familielijn apart bekijken">' +
+    '<option value="">één lijn…</option>' +
+    lijnKeuzes.map(l => '<option value="lijn:' + esc(l) + '"' +
+      (actieveLijn && actieveLijn[1] === l ? " selected" : "") + ">" + esc(l) + "</option>").join("") +
+    "</select>";
+  h += '<button type="button" class="tak-kopieer" id="tak-kopieer" ' +
+    'title="kopieer de link van deze weergave om te delen">' + ikoon("klem") + " Deel deze weergave</button>";
+  if (TAK) {
+    h += '<span class="tak-stand">' + PERSONEN.length +
+      (PERSONEN.length === 1 ? " dossier" : " dossiers") + " in deze weergave</span>";
+  }
+  balk.innerHTML = h;
+  balk.hidden = false;
+  const keuze = document.getElementById("tak-lijn");
+  keuze.addEventListener("change", () => { location.href = takUrl(keuze.value); });
+  document.getElementById("tak-kopieer").addEventListener("click", e => kopieerLink(e.currentTarget));
 }
 
 /* ------------------------------------------------------------------ routering */
@@ -1950,21 +2698,11 @@ function route() {
   else if (kop === "gebeurtenis" && rest) toonGebeurtenis(rest);
   else if (kop === "verhalen") toonVerhalen();
   else if (kop === "verhaal" && rest) toonVerhaal(rest);
+  else if (kop === "cijfers") toonCijfers();
   else if (kop === "verkenner") toonVerkenner(rest || null);
   else toonBoom(rest || null);
   window.scrollTo(0, 0);
-}
-
-// Naam boven de pagina en de generatie-uitleg komen uit stamboom.json, zodat
-// dit dezelfde frontend blijft voor ieders stamboom.
-let INSTELLINGEN = {};
-
-function pasInstellingenToe() {
-  const naam = INSTELLINGEN.titel;
-  if (!naam) return;
-  document.title = naam;
-  const merk = document.getElementById("merknaam");
-  if (merk) merk.textContent = naam;
+  werkLeespaginaBij();
 }
 
 async function start() {
@@ -1976,7 +2714,6 @@ async function start() {
       fetch("/api/verhalen").then(r => r.ok ? r.json() : []).catch(() => []),
       fetch("/api/instellingen").then(r => r.ok ? r.json() : {}).catch(() => ({})),
     ]);
-    pasInstellingenToe();
   } catch (fout) {
     inhoud.innerHTML = "<p>Kon de gegevens niet laden. Draait de server nog? (" + esc(String(fout)) + ")</p>";
     return;
@@ -1984,6 +2721,24 @@ async function start() {
   PERSOON_MAP = Object.fromEntries(PERSONEN.map(p => [p.id, p]));
   GEBEURTENIS_MAP = Object.fromEntries(TIJDSBEELD.map(g => [g.id, g]));
   VERHAAL_MAP = Object.fromEntries(VERHALEN.map(v => [v.id, v]));
+  // naam en titel komen uit stamboom.json; verder weet de site niet wiens boom dit is
+  const merk = document.getElementById("merknaam");
+  if (merk && INSTELLINGEN.titel) merk.textContent = INSTELLINGEN.titel;
+  if (INSTELLINGEN.titel) document.title = INSTELLINGEN.titel;
+  // takkenfilter: eerst onthouden wat er allemaal bestaat (voor de balk),
+  // dan pas de lijsten toesnijden op de tak uit de URL
+  LIJNEN_VOL = [...new Set(PERSONEN.map(p => p.lijn).filter(Boolean))].sort();
+  bepaalTakken();
+  TAK_KEUZES = Object.keys(TAKKEN).filter(k => PERSOON_MAP[TAKKEN[k].anker]);
+  pasTakToe();
+  toonTakbalk();
+  // plaatsen.json alvast meeladen (klein bestand, niet blokkerend): zo kan de
+  // zweefkaart bij een persoon de reis tonen zonder dat het kaart-tabblad
+  // eerst open is geweest
+  fetch("/plaatsen.json").then(r => r.ok ? r.json() : null)
+    .then(g => { if (g && !PLAATSEN_GIDS) PLAATSEN_GIDS = g; })
+    .catch(() => {});
+  meetKopHoogte();
   route();
 }
 
