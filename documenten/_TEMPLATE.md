@@ -26,3 +26,15 @@ boek voeden._
 ## Opmerkingen
 
 _Bijzonderheden aan het document zelf: doorhalingen, inktvlekken, een afwijkende hand._
+
+## Citaatwaardig
+
+_De één of twee regels die je aan tafel zou voorlezen, letterlijk, in de spelling van de
+bron. Zeg erbij of het uit de **akte** komt of uit de **index**. Is er niets bijzonders, laat
+dit kopje dan weg. Een latere schrijfsessie vindt al het materiaal terug met
+`grep -rn "Citaatwaardig" documenten/`. Knip de passage ook uit de scan als knipsel
+(`py scripts/knipsel.py`) zodra hij in een verhaal of levensloop komt._
+
+> …
+
+_Uit de akte. Wat er staat, in gewone taal._

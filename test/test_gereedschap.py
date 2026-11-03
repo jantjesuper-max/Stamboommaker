@@ -205,6 +205,199 @@ def test_broncode_is_tekst():
             )
 
 
+# ---------------------------------------------------------------------------
+# Kaart: een datum vóór een plaatsnaam mag die plaats niet verbergen
+#
+# Geboren-/overledenvelden zijn vrije tekst: "✓ 24-07-1837 Smilde", "◐ ged.
+# 26-02-1727 Burum", "? vóór ca. 1745". De plaats moet eruit komen, de datum
+# niet — en een pure datum is géén plaats. Elke regel hier is een keer de
+# oorzaak geweest van een stip die ontbrak of een datum in de gebrekenlijst.
+# ---------------------------------------------------------------------------
+
+def test_plaats_uit_datumveld():
+    import plaatsen
+
+    for veld, verwacht in [
+        ("✓ 24-07-1837 Smilde", ["Smilde"]),
+        ("◐ ged. 26-02-1727 Burum", ["Burum"]),
+        ("◐ ca. 1750-1758 Nieuwkerken-Waas", ["Nieuwkerken-Waas"]),
+        ("✓ begr. 16-08-1768 Zegveld", ["Zegveld"]),
+        ("waarschijnlijk 23-11-1808 te Koudekerk", ["Koudekerk"]),
+        ("? vóór ca. 1745", []),
+        ("04-08-1869", []),
+        ("ca. 1650/1655 — het doopboek begint pas in 1676", []),
+        ("na 1872, plaats onbekend", []),
+        ("12-03-1900, Voorhout", ["Voorhout"]),   # 'voor' is hier geen datumwoord
+        ("1901, Opmeer", ["Opmeer"]),            # 'op' evenmin
+    ]:
+        gelijk(plaatsen.veld_kandidaten(veld), verwacht, f"plaats uit '{veld}'")
+    waar(plaatsen.is_gemeente("Lemsterland"), "Lemsterland is een gemeente")
+    waar(plaatsen.is_gemeente("gem. Schoterland"), "'gem. ...' is altijd een gemeente")
+    onwaar(plaatsen.is_gemeente("Oosterzee"), "Oosterzee is een dorp")
+
+
+# ---------------------------------------------------------------------------
+# Tijdsbeeld: "vóór JJJJ" is een bovengrens, geen sterfjaar
+# ---------------------------------------------------------------------------
+
+def test_voor_is_bovengrens():
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as map_:
+        pad = Path(map_) / "proef-1725ca.md"
+        pad.write_text('---\nid: proef-1725ca\ngeboren: "? ca. 1725, plaats onbekend"\n'
+                       'overleden: "? vóór 09-01-1834, plaats onbekend"\n---\n', encoding="utf-8")
+        pers = tijdsbeeld.persoon_gegevens(pad)
+    gelijk(pers["geb"], 1725, "geboortejaar gelezen")
+    waar(pers["eind"] <= 1810, f"'vóór 1834' bij geboren 1725 eindigt op een mensenleven, niet op 1834 (kreeg {pers['eind']})")
+
+
+# ---------------------------------------------------------------------------
+# PDF: een knipsel wordt een figuur met bijschrift, met een pad dat de browser vindt
+#
+# De eigen markdown-renderer van pdf.py kende geen afbeeldingen: ![x](y) werd een
+# uitroepteken met een link, en "Download als PDF" liet de knipsels weg. De HTML
+# wordt als file:// geopend, dus een plaatje moet een absoluut file://-pad krijgen,
+# opgelost ten opzichte van de map van het markdown-bestand.
+# ---------------------------------------------------------------------------
+
+def test_pdf_knipsels():
+    import importlib.util
+    import re
+    import tempfile
+
+    spec = importlib.util.spec_from_file_location("stamboom_pdf", WORTEL / "scripts" / "pdf.py")
+    pdf = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(pdf)
+
+    with tempfile.TemporaryDirectory() as map_:
+        basis = Path(map_)
+        (basis / "beeld").mkdir()
+        beeld = basis / "beeld" / "1893-04-05-knipsel.jpg"
+        beeld.write_bytes(b"\xff\xd8\xff\xd9")
+        ctx = {"namen": {}, "noten": {}, "nootvolgorde": [], "basismap": basis}
+
+        html = pdf.markdown_naar_html("![Leeuwarder Courant, 5 april 1893: dankbetuiging [...] van de weduwe](beeld/1893-04-05-knipsel.jpg)", ctx)
+        waar("<figure" in html, "los knipsel wordt een figuur")
+        waar("<figcaption>Leeuwarder Courant, 5 april 1893: dankbetuiging [...] van de weduwe</figcaption>" in html,
+             "bijschrift met [...] blijft heel")
+        m = re.search(r'<img src="([^"]+)"', html)
+        gelijk(m.group(1) if m else None, beeld.resolve().as_uri(), "beeldpad wordt een file://-URI")
+        onwaar("!<a" in html, "geen uitroepteken met een link")
+
+        html = pdf.markdown_naar_html("Zie ![kaart](https://example.org/kaart.png) hier.", ctx)
+        waar('<img src="https://example.org/kaart.png"' in html, "webadres blijft staan")
+
+        html = pdf.markdown_naar_html("Zie [Delpher](https://www.delpher.nl/).", ctx)
+        waar('<a href="https://www.delpher.nl/">Delpher</a>' in html, "gewone link blijft een link")
+        onwaar("<img" in html, "een link is geen beeld")
+
+
+# ---------------------------------------------------------------------------
+# Zoekscript: schrijfwijzen, de Begraven-alias en de archiefcodes
+#
+# Eén letter verschil is een andere zoekopdracht, en de API meldt niets bij een
+# onbekende filterwaarde. Deze regels bewaken dat het script die valkuilen
+# blijft afvangen. Alles offline: geen API-aanroep.
+# ---------------------------------------------------------------------------
+
+def test_zoek_openarch_offline():
+    import zoek_openarch as z
+
+    waar("Baukjen Wybes" in z._naamvarianten("Baukjen Wiebes"), "ie -> y: Wiebes geeft Wybes")
+    waar("Lammert" in z._woordvarianten("Lambert"), "mb -> mm: Lambert geeft Lammert (assimilatie)")
+    gelijk(z._klanksleutel("Barnevelt"), z._klanksleutel("Barneveld"), "t en d klinken hetzelfde")
+    gelijk(z._klanksleutel("Bruinsma"), z._klanksleutel("Bruynsma"), "ui en uy klinken hetzelfde")
+    onwaar("Baucjen Wybes" in z._naamvarianten("Baukjen Wiebes"), "nooit twee woorden tegelijk variëren")
+    gelijk(z.BEGRAVEN_ALIAS.get("Begrafenis"), "Begraven", "Begrafenis wordt naar Begraven vertaald")
+    waar("Begrafenis" in z.GEBEURTENISTYPEN and "Begraven" in z.GEBEURTENISTYPEN,
+         "beide schrijfwijzen toegestaan")
+    for code in ("frl", "dar", "hco", "wfa", "nha", "zar", "gld", "elo", "saa", "hua", "gra"):
+        waar(code in z.ARCHIEFCODES, f"archiefcode {code} bekend")
+    onwaar("dra" in z.ARCHIEFCODES, "'dra' is niet de Drentse code (dat is 'dar')")
+    gelijk(z._fullsize("https://x-images.memorix.nl/abc/thumb/640x480/pad/scan.jp2"),
+           "https://x-images.memorix.nl/abc/download/fullsize/pad/scan.jp2", "thumb -> fullsize")
+    gelijk(z._iiif("https://x.memorix.io/resources/iiif/3/uuid/info.json"),
+           "https://x.memorix.io/resources/iiif/3/uuid/full/max/0/default.jpg", "info.json -> volledig beeld")
+
+
+def test_delpher_frase():
+    import zoek_delpher as d
+
+    waar(d.lijkt_frase("Jan de Vries Oudshoorn"), "losse woorden zonder AND zijn een frase (stille nul)")
+    onwaar(d.lijkt_frase("Vries AND Oudshoorn"), "met AND is het geen frase")
+    onwaar(d.lijkt_frase('"gouden bruiloft"'), "een bewuste frase tussen aanhalingstekens is in orde")
+    onwaar(d.lijkt_frase("Oudshoorn"), "één woord is een ijkpunt, geen frase")
+
+
+# ---------------------------------------------------------------------------
+# Knipsels: elk beeld bestaat en heeft een bijschrift
+# ---------------------------------------------------------------------------
+
+def test_knipsel_controle():
+    import importlib.util
+    import tempfile
+
+    spec = importlib.util.spec_from_file_location("stamboom_controleer", WORTEL / "test" / "controleer.py")
+    c = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(c)
+
+    with tempfile.TemporaryDirectory() as map_:
+        wortel = Path(map_)
+        (wortel / "personen").mkdir()
+        (wortel / "boek" / "verhalen" / "beeld").mkdir(parents=True)
+        (wortel / "boek" / "verhalen" / "beeld" / "1893-goed.jpg").write_bytes(b"\xff\xd8")
+        (wortel / "boek" / "verhalen" / "beeld" / "1900-ongebruikt.jpg").write_bytes(b"\xff\xd8")
+        (wortel / "boek" / "verhalen" / "1893-proef.md").write_text(
+            "![Krant, 1893: bericht [...]](beeld/1893-goed.jpg)\n"
+            "![](beeld/1893-goed.jpg)\n"
+            "![Weg](beeld/bestaat-niet.jpg)\n"
+            "![Web](https://example.org/x.png)\n", encoding="utf-8")
+        (wortel / "personen" / "jansen-jan-1850.md").write_text(
+            "![Akte, 1850: aangifte](../boek/verhalen/beeld/1893-goed.jpg)\n", encoding="utf-8")
+        problemen, los = c.knipsel_problemen(wortel)
+    gelijk(len(problemen), 2, f"één kapot pad en één leeg bijschrift: {problemen}")
+    waar(any("bestaat-niet.jpg" in p for p in problemen), "kapot pad gemeld")
+    waar(any("geen bijschrift" in p for p in problemen), "leeg bijschrift gemeld")
+    gelijk(los, ["1900-ongebruikt.jpg"], "ongebruikt beeld wordt genoemd, gebruikt beeld niet")
+
+
+def test_dubbele_werklijstregels():
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("stamboom_controleer", WORTEL / "test" / "controleer.py")
+    c = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(c)
+
+    def item(nr, pid, gen, naam="Naam", af=False):
+        return {"regelnr": nr, "af": af, "generatie": gen, "id": pid, "naam": naam,
+                "regel": f"- [ ] g{gen} · {pid} — {naam}"}
+
+    gelijk(c.dubbele_regels([item(1, "pieters-rinke-1730ca", 8), item(2, "pieters-rinke-1730ca", 8)]).__len__(), 1,
+           "letterlijk dubbel id wordt gemeld")
+    gelijk(len(c.dubbele_regels([item(1, "pieters-rinke", 8), item(2, "pieters-rinke-1730ca", 8)])), 1,
+           "zelfde persoon met en zonder jaarstaart wordt gemeld")
+    gelijk(c.dubbele_regels([item(1, "bijl-aldert-1894", 3), item(2, "bijl-aldert-1830", 6)]), [],
+           "grootvader en kleinzoon met dezelfde naam zijn geen dubbel")
+    gelijk(c.dubbele_regels([item(1, "pieters-rinke", 8, "Naam · overgeslagen: dubbele regel"),
+                             item(2, "pieters-rinke-1730ca", 8)]), [],
+           "een als overgeslagen gemarkeerde kopie telt niet mee")
+
+
+# ---------------------------------------------------------------------------
+# Alle scripts blijven geldige Python (ook die Pillow of PyMuPDF nodig hebben)
+# ---------------------------------------------------------------------------
+
+def test_scripts_parseerbaar():
+    import ast
+
+    for pad in sorted((WORTEL / "scripts").glob("*.py")) + sorted((WORTEL / "test").glob("*.py")):
+        try:
+            ast.parse(pad.read_text(encoding="utf-8"))
+        except SyntaxError as fout:
+            FOUTEN.append(f"{pad.relative_to(WORTEL)}: syntaxfout: {fout}")
+
+
 def main():
     try:
         sys.stdout.reconfigure(encoding="utf-8")
@@ -212,7 +405,9 @@ def main():
         pass
     for test in (test_plaatsen, test_plaats_raakt, test_kalender, test_instellingen,
                  test_uitleg_wordt_overgeslagen, test_verse_kloon_is_schoon,
-                 test_broncode_is_tekst):
+                 test_broncode_is_tekst, test_plaats_uit_datumveld, test_voor_is_bovengrens,
+                 test_pdf_knipsels, test_zoek_openarch_offline, test_delpher_frase,
+                 test_knipsel_controle, test_dubbele_werklijstregels, test_scripts_parseerbaar):
         test()
     if FOUTEN:
         print(f"{len(FOUTEN)} fout(en):")

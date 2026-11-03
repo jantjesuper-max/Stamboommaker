@@ -17,9 +17,11 @@ account, geen abonnement op een genealogiesite, geen database.
 
 | | |
 |---|---|
-| **Persoonsdossiers** | Eén markdown-bestand per voorouder: kerngegevens met bron en betrouwbaarheidscode, levensloop, documenten, open vragen, onderzoekslog |
-| **Archiefzoeker** | `zoek_openarch.py` — de hele index van [Open Archieven](https://www.openarchieven.nl) vanaf de opdrachtregel, zonder API-key. Print rollen, patroniemen, opmerkingenvelden en de scan-URL's waar de website ze verstopt |
-| **Scans binnenhalen en lezen** | Volledige resolutie ophalen waar de viewer alleen thumbnails geeft, en uitsnedes met contrast maken zodat een 18e-eeuwse hand werkelijk te lezen is |
+| **Persoonsdossiers** | Eén markdown-bestand per voorouder, opgezet als pagina over een mens: een opening bij een moment uit een akte, kerngegevens met bron en betrouwbaarheidscode, een levensloop in episodes met citaten en knipsels, documenten, open vragen, onderzoekslog |
+| **Archiefzoeker** | `zoek_openarch.py` — de hele index van [Open Archieven](https://www.openarchieven.nl) vanaf de opdrachtregel, zonder API-key. Print rollen, patroniemen, opmerkingenvelden en de scan-URL's waar de website ze verstopt; `varianten`, `bronnen` en `dekking` meten of een muur een muur is |
+| **Kranten** | `zoek_delpher.py` doorzoekt Delpher via het open SRU-endpoint van de KB; `zoek_courant.py`, `zoek_dekrantvantoen.py` en `zoek_kbz.py` de regionale krantenbanken (Leiden, Alkmaar, Leeuwarder Courant vanaf 1752, Zeeland) waar het plaatselijke nieuws staat. Met de OCR-tekst en de paginascan |
+| **Knipsels** | `knipsel.py` snijdt het bericht, de advertentie of de handtekening uit de scan, zodat verhalen en levenslopen de bron zelf laten zien. Website en PDF tonen ze als figuur met onderschrift |
+| **Scans binnenhalen en lezen** | Volledige resolutie ophalen waar de viewer alleen thumbnails geeft (Memorix, IIIF, archieven.nl), en uitsnedes met contrast maken zodat een 18e-eeuwse hand werkelijk te lezen is |
 | **Tijdsbeeld** | Een kalender van 41 Nederlandse rampen, oorlogen, epidemieën en crises van 1636 tot 1974, die het script naast de leefjaren en woonplaatsen van elke voorouder legt |
 | **Verhalenverzameling** | Elke bijzondere vondst als apart bestand met bron en een score, doorzoekbaar — zodat niets verdwijnt tussen het vinden en het schrijven |
 | **Het boek** | Stijlgids, boekopzet en hoofdstukken met voetnoten; `bouw_boek.py` plakt er een manuscript van (met pandoc ook Word) |
@@ -28,7 +30,9 @@ account, geen abonnement op een genealogiesite, geen database.
 | **Controlescript** | Meet of werklijst en dossiers synchroon lopen, en rekent uit wie er aan de beurt is |
 
 En het belangrijkste: **de skill `/doorwerk`**, die dat allemaal aan elkaar knoopt en uren of
-nachten achter elkaar door blijft werken.
+nachten achter elkaar door blijft werken. Heeft een voorouder eenmaal een dossier, dan maakt
+**`/herzie`** er een pagina van: de scans opnieuw gelezen, de kranten doorzocht, knipsels
+erbij, en de levensloop centraal.
 
 ---
 
@@ -39,7 +43,8 @@ Je hebt nodig:
 - **Python 3.10 of hoger** ([python.org](https://www.python.org/downloads/) — op Windows het
   vinkje "Add Python to PATH" aanzetten)
 - **[Claude Code](https://claude.com/claude-code)** met een Claude-abonnement
-- Optioneel: `py -m pip install pillow` voor het inzoomen op scans, en
+- Optioneel: `py -m pip install pillow` voor het inzoomen op scans en de knipsels,
+  `py -m pip install pymupdf` voor krantenpagina's die als pdf komen, en
   [pandoc](https://pandoc.org) voor de Word-export
 
 Dan:
@@ -121,7 +126,9 @@ log.
 **Het gaat om mensen, niet om datums.** Een geboorteakte geeft een dag. Het bevolkingsregister
 geeft een huis, het notarieel archief een schuld, het militieregister een lichaam, het
 gevangenisregister een signalement, en de krant een ongeluk. Die bronnen worden hier
-systematisch afgelopen, want zonder hen levert een dossier geen boek op.
+systematisch afgelopen, want zonder hen levert een dossier geen boek op. En de pagina laat
+de bron zien: elk citaat uit een akte of een krant komt met het knipsel erbij, zodat de lezer
+de kolom en de handtekening ziet en niet alleen onze overschrijving.
 
 **Geen emoji's, en Nederlands.** In dossiers, scripts, commits en het boek.
 
@@ -139,7 +146,8 @@ geheugen van één gesprek.
 ├── CLAUDE.md               de werkinstructies: conventies, regels, archieflessen
 ├── .claude/skills/
 │   ├── opstarten/          het openingsgesprek: van leeg naar werkende stamboom
-│   └── doorwerk/           de motor: voorouder na voorouder afwerken
+│   ├── doorwerk/           de motor: voorouder na voorouder afwerken
+│   └── herzie/             van dossier naar pagina: meer bron, kranten, knipsels, levensloop
 ├── personen/               één dossier per voorouder (_TEMPLATE.md)
 ├── documenten/
 │   ├── inbox/              eigen scans hier neerzetten → "verwerk de inbox"
@@ -158,8 +166,9 @@ geheugen van één gesprek.
 │   ├── opzet.md            delen, rode draden, hoofdstukkentabel
 │   ├── zijtakken.md        wat wél en niet in de stamboom komt
 │   ├── verhalen/           losse vondsten met bron en score
+│   │   └── beeld/          de knipsels: krantenberichten en stukken akte als beeld
 │   └── hoofdstukken/       het boek zelf, met voetnoten
-├── scripts/                het gereedschap (alleen standaardbibliotheek)
+├── scripts/                het gereedschap (standaardbibliotheek; Pillow voor beeld)
 ├── website/                de lokale site
 └── test/
     ├── controleer.py       meet de voortgang en de route

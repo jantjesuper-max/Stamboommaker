@@ -206,6 +206,40 @@ Hooguit één of twee citaten per verhaal. Wat je overal doet, valt nergens meer
 
 ---
 
+# Laat de lezer de bron zien: knipsels
+
+Een citaat is onze overschrijving. Een knipsel is de bron zelf: de kolom, het lettertype, de
+hand van de klerk, de handtekening onderaan. Wie het krantenbericht ziet, gelooft het verhaal
+op een andere manier dan wie het alleen leest.
+
+Daarom komt bij elk citaat uit een krant of een akte het knipsel erbij, vlak onder het citaat.
+In een verhaal en in de levensloop van een dossier:
+
+```markdown
+> eene som van drie honderd vijf en zeventig gulden te voldoen binnen veertien dagen
+
+![Contract van plaatsvervanging, 30 april 1889: "eene som van drie honderd vijf en zeventig gulden"](beeld/1889-04-30-plaatsvervanging-drie-honderd-vijf-en-zeventig-gulden.jpg)
+```
+
+Het onderschrift noemt de bron en de datum, en dan de kern in de woorden van de bron. Geen
+uitleg in het onderschrift; die staat in de tekst eronder.
+
+Knip precies het bericht en niet de pagina: een halve kolom is leesbaar, een hele pagina op
+1400 pixels niet. Een handtekening, een huisnummer of een doorhaling mag een knipsel van drie
+regels zijn.
+
+Het knipsel vervangt de bronvermelding niet. De voetnoot of de regel **Bron:** blijft staan,
+met krant, datum, pagina en URL, of met archief, toegang, inventarisnummer en akte.
+
+Geen knipsel zonder gelezen bron. Lees het bericht eerst op de scan; de OCR kan een 68 als 63
+lezen, en het knipsel laat dan zien wat er echt staat. Beeld van anderen (een museumfoto, een
+kaart, een persfoto) alleen met een vrije licentie, en dan staan licentie en URL in de
+voetnoot.
+
+Hoe het technisch gaat staat in `CLAUDE.md`, "Knipsels: laat de lezer de bron zien".
+
+---
+
 # Maak van namen mensen
 
 Vermijd genealogie in volzinnen:

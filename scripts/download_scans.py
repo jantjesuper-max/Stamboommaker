@@ -32,11 +32,19 @@ import time
 DOCMAP = "documenten"
 MAX_BYTES = 5 * 1024 * 1024
 
+# proxy.archieven.nl (Westfries Archief, Noord-Hollands Archief en de andere archieven
+# die via archieven.nl leveren) antwoordt met een **301** naar preserve-<archief>.archieven.nl,
+# en weigert zonder browser-User-Agent. Zonder -L levert curl dan een leeg 301-lichaam op,
+# waarna de JPEG-controle hieronder faalt en de scan er "geblokkeerd" uitziet. Dat is drie
+# rondes lang ten onrechte als "HTTP 403 - bot was blocked" opgeschreven.
+BROWSER_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+CURL_BASIS = ["curl", "-s", "--fail", "-L", "-A", BROWSER_UA]
+
 
 def api_show(record):
     archief, _, identifier = record.partition(":")
     url = f"https://api.openarch.nl/1.1/records/show.json?archive={archief}&identifier={identifier}&lang=nl"
-    uitvoer = subprocess.run(["curl", "-s", "--fail", url], capture_output=True, timeout=60, check=True)
+    uitvoer = subprocess.run(CURL_BASIS + [url], capture_output=True, timeout=60, check=True)
     return json.loads(uitvoer.stdout.decode("utf-8"))
 
 
@@ -50,8 +58,12 @@ def scan_uris(data):
             continue
         scans = scans if isinstance(scans, list) else [scans]
         for s in scans:
-            if s.get("Uri") and s["Uri"] not in uris:
-                uris.append(s["Uri"])
+            # Sommige archieven (Stadsarchief Amsterdam) vullen 'Uri' niet en zetten de
+            # thumb in 'UriViewer' of 'UriPreview'; zonder deze terugval lijkt zo'n record
+            # scanloos.
+            uri = s.get("Uri") or s.get("UriViewer") or s.get("UriPreview")
+            if uri and uri not in uris:
+                uris.append(uri)
     return uris
 
 
@@ -72,24 +84,82 @@ def jpeg_afmetingen(data):
     return None
 
 
-def download_hires(uri):
-    """Probeer groot naar klein; geef (bytes, gebruikte_url) of (None, None)."""
+def kandidaat_urls(uri):
+    """De URL's om te proberen, groot naar klein, afhankelijk van de beeldserver."""
+    # IIIF (Erfgoed Leiden e.d.): .../info.json is metadata, niet de scan zelf.
+    if uri.endswith("/info.json"):
+        return [uri[: -len("info.json")] + "full/max/0/default.jpg", uri]
+    # hdl.handle.net stuurt door naar een archief-VIEWER (403 zonder sessie), maar de
+    # doorstuur-URL bevat `miguid` (bestands-id) en `miadt` (toegangsnummer) -- en daarmee
+    # is de scan gewoon op te halen via het gewone download-pad van archieven.nl.
+    if "hdl.handle.net" in uri:
+        kandidaten = []
+        try:
+            r = subprocess.run(["curl", "-sIL", "-A", BROWSER_UA, uri],
+                               capture_output=True, text=True, timeout=60)
+            m = re.search(r"miguid=([0-9A-Fa-f]+).*?miadt=(\d+)", r.stdout or "")
+            if m:
+                kandidaten.append(f"https://proxy.archieven.nl/download/{m.group(2)}/{m.group(1)}")
+        except Exception:
+            pass
+        return kandidaten + [uri]
+    # archieven.nl levert maar één maat; de thumb-varianten hieronder bestaan daar niet.
+    if "archieven.nl" in uri:
+        return [uri]
     kandidaten = [re.sub(r"/thumb/\d+x\d+/", "/download/fullsize/", uri)]
     for maat in ("2000x2000", "1000x1000"):
         vervangen = re.sub(r"/thumb/\d+x\d+/", f"/thumb/{maat}/", uri)
         if vervangen != uri or maat in uri:
             kandidaten.append(vervangen)
     kandidaten.append(uri)  # origineel als laatste redmiddel
-    for url in kandidaten:
+    return kandidaten
+
+
+def download_hires(uri):
+    """Probeer groot naar klein; geef (bytes, gebruikte_url) of (None, None)."""
+    for url in kandidaat_urls(uri):
         try:
-            uitvoer = subprocess.run(["curl", "-s", "--fail", "--max-time", "60", url],
-                                     capture_output=True, timeout=90, check=True)
-        except subprocess.CalledProcessError:
+            uitvoer = subprocess.run(CURL_BASIS + ["--max-time", "120", url],
+                                     capture_output=True, timeout=180, check=True)
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
             continue
         data = uitvoer.stdout
-        if data[:2] == b"\xff\xd8" and 10_000 < len(data) <= MAX_BYTES:
+        if data[:2] != b"\xff\xd8" or len(data) <= 10_000:
+            continue
+        if len(data) <= MAX_BYTES:
             return data, url
+        # Boven de projectgrens NIET weggooien maar comprimeren op VOLLE PIXELMAAT.
+        # archieven.nl levert maar één maat, en die is bij sommige archieven stelselmatig
+        # 8-9 MB (6000 x 5000). Zulke scans afwijzen met "MISLUKT" laat ze als
+        # [nog te downloaden] in de dossiers staan. Verkleinen mag niet (een jaartal beslaat
+        # zeventig pixels), dus alleen de JPEG-kwaliteit gaat omlaag.
+        kleiner = comprimeer(data)
+        if kleiner:
+            return kleiner, url
     return None, None
+
+
+def comprimeer(data):
+    """Slaat een te grote JPEG opnieuw op met lagere kwaliteit, zonder te verkleinen."""
+    try:
+        import io as _io
+        from PIL import Image
+    except ImportError:
+        return None
+    try:
+        Image.MAX_IMAGE_PIXELS = None
+        im = Image.open(_io.BytesIO(data))
+        im.load()
+    except Exception:
+        return None
+    for kwaliteit in (72, 60, 50, 40):
+        buf = _io.BytesIO()
+        im.save(buf, "JPEG", quality=kwaliteit, optimize=True)
+        if buf.tell() <= MAX_BYTES:
+            print(f"    (gecomprimeerd op volle pixelmaat: {len(data)//1024} kB -> "
+                  f"{buf.tell()//1024} kB, kwaliteit {kwaliteit})")
+            return buf.getvalue()
+    return None
 
 
 def verwerk_md(md_pad):
@@ -99,7 +169,10 @@ def verwerk_md(md_pad):
     if not m_url:
         print(f"  OVERGESLAGEN (geen url): {md_pad}")
         return 0
-    m_record = re.search(r"openarchieven\.nl/([a-z]+:[0-9a-f-]+)", m_url.group(1))
+    # Let op de hoofdletters: frl-id's zijn kleine letters, maar het Westfries Archief en
+    # het Noord-Hollands Archief geven HOOFDLETTER-hex (wfa:BCCBB35C-7109-...). Met het oude
+    # patroon [0-9a-f-]+ werd elk record van die twee archieven stilzwijgend overgeslagen.
+    m_record = re.search(r"openarchieven\.nl/([a-z]+:[0-9A-Fa-f-]+)", m_url.group(1))
     if not m_record:
         print(f"  OVERGESLAGEN (geen record-id): {md_pad}")
         return 0

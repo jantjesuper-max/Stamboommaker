@@ -30,7 +30,11 @@ kennis die je anders elke keer opnieuw opzoekt.
   registers, ook DTB waar de Nederlandse indexen ophouden. Onmisbaar vóór 1811
 - **Delpher** — delpher.nl — kranten, boeken en tijdschriften. Overlijdensadvertenties,
   ongelukken, faillissementen, veilingen, gemeenteberichten, stakingen. Geeft zelden een
-  datum die je nog niet had, maar bijna altijd het verhaal eromheen
+  datum die je nog niet had, maar bijna altijd het verhaal eromheen. **Doorzoekbaar met
+  `py scripts/zoek_delpher.py zoek "<naam> AND <dorp>"`** (open SRU-endpoint van de KB, geen
+  sleutel; `toon` geeft de volledige OCR-tekst). ⚠ Zet `AND` tussen élk woord, anders wordt
+  het een frase en geeft het stilzwijgend nul; en Delpher dekt alleen de KB-kranten, zie
+  *Kranten per streek* hieronder
 - **CBG Centrum voor familiegeschiedenis** — cbg.nl — familieadvertenties, bidprentjes
   (in katholieke streken goud waard), heraldiek, persoonskaarten na 1938
 - **Nationaal Archief** — nationaalarchief.nl — o.a. de VOC- en marinebronnen, notariële
@@ -74,6 +78,33 @@ portaal heeft. Zet de naam en de URL hieronder zodra je hem hebt gebruikt.
   census-jaren via FamilySearch, en de vertrekregisters aan Nederlandse kant
 
 ---
+
+## Kranten per streek
+
+Het plaatselijke nieuws (dorpsrubrieken, familieadvertenties, boelgoeden, de uitslag van de
+zangvereniging) staat grotendeels **niet** in Delpher maar bij het regionale archief. Kies de
+krantenbank naar de streek; bij elke voorouder hoort minstens één krantenzoekopdracht (zie
+`CLAUDE.md`, "Kranten: verplicht bij elke voorouder").
+
+| Streek | Krantenbank | Hoe |
+|--------|-------------|-----|
+| Landelijk | Delpher (KB) | `py scripts/zoek_delpher.py zoek "<naam> AND <dorp>" --van .. --tot ..`; `toon <id>` voor de OCR-tekst |
+| Rijnstreek, Leiden en omstreken | leiden.courant.nu — Leidsch Dagblad, Leidse Courant, Nieuwe Leidsche Courant | `py scripts/zoek_courant.py zoek "<naam> AND <dorp>" --bank leiden --van .. --tot ..`; `scan <url> --uit <png>` voor de pagina. ⚠ Gemeten 03-11-2026: de site toonde een bot-controle ("Checking if you're human"); het script meldt dat dan en werkt er niet omheen. Zoek dan handmatig in de browser en noteer de URL |
+| Noord-Holland boven het IJ, Alkmaar, Den Helder | kranten.archiefalkmaar.nl — Alkmaarsche Courant, Schager Courant, Heldersche Courant | `zoek_courant.py --bank alkmaar` |
+| Friesland | De Krant van Toen — Leeuwarder Courant vanaf 1752, met scans | `py scripts/zoek_dekrantvantoen.py zoek "<naam> <dorp>" --van .. --tot ..`; `toon <id> --png <pad>` |
+| Zeeland en Zeeuws-Vlaanderen | Krantenbank Zeeland — Middelburgsche Courant, Ter Neuzensche Courant e.a. | `py scripts/zoek_kbz.py zoek "<termen>" --van dd-mm-jjjj --tot dd-mm-jjjj`; `scan <url> --uit <jpg>`. ⚠ Altijd `--van` én `--tot` |
+| Groningen, Drenthe, Overijssel | Delpher (Nieuwsblad van het Noorden, Provinciale Drentsche en Asser Courant) | `zoek_delpher.py` |
+| West-Friesland | Delpher (Hoornsche Courant, Onze Courant, Westfriesch Dagblad) | `zoek_delpher.py`, rubriek Burgerlijke Stand per dorp |
+
+**Nieuwe streek, nieuwe krantenbank.** Komt een voorouder uit een streek die hier niet staat,
+zoek dan eerst uit welke krantenbank daar bestaat (overzicht:
+<https://www.hennekam.net/krantenarchieven-nederland/> en het regionale archief). Draait hij
+op de courant.nu-software (URL's als `/issue/<KRANT>/<datum>/edition/0/page/<n>`), zet hem
+dan in `BANKEN` van `scripts/zoek_courant.py`. Schrijf hem hier bij, ook als hij alleen
+handmatig werkt of achter een studiezaal zit.
+
+Een krantenvondst is een verhaal, geen bijzaak: citaat plus knipsel (`py scripts/knipsel.py`)
+in `boek/verhalen/` en in de levensloop van het dossier.
 
 ## De bronnen die verder gaan dan datums
 
@@ -134,6 +165,8 @@ geen akte.
 Voor de gebeurtenissen uit `tijdsbeeld/_KALENDER.md`:
 
 - **Delpher** voor kranten — de eerste ingang bij elke ramp, staking of epidemie
+  (`py scripts/zoek_delpher.py zoek "cholera AND <dorp>" --van .. --tot ..`), en de regionale
+  krantenbank van de streek voor het plaatselijke bericht
 - **Overlijdensregisters als meetinstrument.** Een sterftepiek in één dorp in één jaar is de
   hardste plaatselijke aanwijzing die er is voor een epidemie
 - **Gemeenteverslagen** en de *Verslagen aan den Koning betrekkelijk den staat der Openbare

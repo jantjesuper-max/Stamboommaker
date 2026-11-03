@@ -3,11 +3,17 @@
 Draaien met:  py test/controleer.py        (vanuit de projectmap)
               py test/controleer.py --fix   (werkt het voortgangscijfer bij)
 
-Meet vier dingen:
+Meet zeven dingen:
+  0. Niemand staat twee keer op de werklijst, ook niet onder twee id's.
   1. Elk afgevinkt item heeft een dossier in personen/.
   2. Elk dossier in personen/ staat in de werklijst.
-  3. Elk dossier is compleet genoeg om afgevinkt te mogen zijn.
-  4. Wikilinks in dossiers verwijzen naar ID's die in de werklijst bestaan.
+  3. Elk dossier is compleet genoeg om afgevinkt te mogen zijn (met Levensloop).
+  4. Wikilinks in dossiers verwijzen naar ID's die in de werklijst bestaan, en een
+     ouder die in de kerngegevens bij naam wordt genoemd heeft ook een
+     `vader:`/`moeder:`-wikilink — en daarmee een werklijstregel.
+  5. Documentmappen horen bij werklijst-ID's en elk bestand heeft een beschrijving.
+  6. Elk knipsel (![bijschrift](pad)) in een dossier, verhaal of hoofdstuk wijst naar
+     een bestand dat bestaat, en heeft een bijschrift.
 """
 
 import re
@@ -82,8 +88,15 @@ def open_vragen(pad):
     sectie = tekst[begin : volgende if volgende != -1 else len(tekst)]
     return len(OPEN_VRAAG.findall(sectie))
 
-# Kopjes die een dossier moet hebben om als afgevinkt te gelden.
-VEREISTE_KOPJES = ["## Kerngegevens", "## Documenten", "## Onderzoekslog"]
+# Kopjes die een dossier moet hebben om als afgevinkt te gelden. De Levensloop staat
+# erbij: dat is het verhalende deel en volgens het sjabloon de grondstof voor het boek.
+# In een ander project viel dat kopje ongemerkt weg zodra er thematische kopjes voor in
+# de plaats kwamen, en na een maand misten 129 van de 452 dossiers het.
+VEREISTE_KOPJES = ["## Kerngegevens", "## Levensloop", "## Documenten", "## Onderzoekslog"]
+
+# Een knipsel of scan in de tekst: ![bijschrift](pad). Het bijschrift mag één niveau
+# rechte haken bevatten ("[...]" voor een weglating), net als in de website en de PDF.
+AFBEELDING = re.compile(r"!\[((?:[^\[\]]|\[[^\]]*\])*)\]\(([^)\s]+)[^)]*\)")
 
 
 def lees_werklijst():
@@ -101,9 +114,133 @@ def lees_werklijst():
                     "generatie": int(m.group(2)[1:]),
                     "id": m.group(3),
                     "naam": m.group(4),
+                    "regel": regel,
                 }
             )
     return items
+
+
+def kern_id(pid):
+    """'rinke-pieters-1730ca' -> 'rinke-pieters': het id zonder jaarstaart."""
+    return re.sub(r"-\d{3,4}(ca)?$", "", pid)
+
+
+def dubbele_regels(items):
+    """Dezelfde persoon twee keer op de werklijst — letterlijk, of onder twee id's.
+
+    per_id is een dict, dus bij een dubbel ID wint stilzwijgend de LAATSTE regel en
+    verdwijnt de eerste uit elke telling en uit de route; het voortgangscijfer telt de
+    persoon bovendien dubbel. Het gemenere geval is een id mét en zonder jaarstaart
+    (`rinke-pieters` naast `rinke-pieters-1730ca`), allebei dezelfde generatie: de route
+    stuurt dan naar de kale kopie van iemand die al lang is afgerond. De eis "dezelfde
+    generatie" is nodig, want grootvader en kleinzoon dragen geregeld dezelfde naam.
+    Een regel met '· overgeslagen:' telt niet mee: dat is de manier om een kopie
+    onschadelijk te maken.
+    """
+    problemen = []
+    gezien = {}
+    for i in items:
+        gezien.setdefault(i["id"], []).append(i["regelnr"])
+    for pid, regels in sorted(gezien.items()):
+        if len(regels) > 1:
+            problemen.append(
+                f"'{pid}' staat {len(regels)}x op de werklijst (regels "
+                + ", ".join(str(r) for r in regels)
+                + ") — houd één regel over en voeg de vondsten samen"
+            )
+    kernen = {}
+    for i in items:
+        if "overgeslagen:" in i["naam"]:
+            continue
+        kernen.setdefault((kern_id(i["id"]), i["generatie"]), []).append(i)
+    for (kern, gen), groep in sorted(kernen.items(), key=lambda x: str(x[0])):
+        ids = sorted({i["id"] for i in groep})
+        if len(ids) < 2:
+            continue
+        problemen.append(
+            f"g{gen} · '{kern}' staat onder {len(ids)} verschillende id's op de werklijst ("
+            + ", ".join(f"regel {i['regelnr']}={i['id']}" for i in groep)
+            + ") — dezelfde persoon in dezelfde generatie; houd één id over en zet achter "
+            "de andere '· overgeslagen: dubbele regel, zie <id>'"
+        )
+    return problemen
+
+
+def ouders_zonder_wikilink(items):
+    """Ouder wél bij naam in de kerngegevens, maar geen wikilink in de frontmatter.
+
+    Dit is het gat waar voorouders in vallen: een vader staat als "Vader | Jan Jansen"
+    in de kerngegevens van zijn kind, maar zonder `vader:`-wikilink en dus zonder
+    werklijstregel. De route stuurt er dan nooit iemand heen. Een gevonden ouder krijgt
+    altijd drie dingen: een werklijstregel, een wikilink en een node in het overzicht.
+    """
+    LEEG = ("onbekend", "niet gevonden", "niet in de akte", "niet bekend", "geen", "—", "-")
+    problemen = []
+    for i in items:
+        pad = PERSONEN / f"{i['id']}.md"
+        if not (i["af"] and pad.exists()):
+            continue
+        tekst = pad.read_text(encoding="utf-8")
+        deel = tekst.split("---")
+        fm, body = (deel[1], "---".join(deel[2:])) if len(deel) > 2 else ("", tekst)
+        for rol in ("vader", "moeder"):
+            # let op: `\s*` zou de nieuwe regel meenemen en dan lijkt een leeg veld gevuld
+            m = re.search(rf"^{rol}:[^\S\n]*(.*)$", fm, re.M)
+            if m and m.group(1).strip().strip('"'):
+                continue  # veld is gevuld; controle 4 kijkt of het doel bestaat
+            rij = re.search(rf"^\|\s*{rol}\s*\|([^|]*)\|", body, re.M | re.I)
+            if not rij:
+                continue
+            inhoud = re.sub(r"[*⚠]", "", rij.group(1)).strip()
+            if not inhoud or inhoud.lower().startswith(LEEG):
+                continue
+            problemen.append(
+                f"personen/{i['id']}.md: veld '{rol}:' is leeg terwijl de kerngegevens "
+                f"'{inhoud[:60]}' noemen — geen werklijstregel voor die voorouder?"
+            )
+    return problemen
+
+
+def knipsel_problemen(wortel=WORTEL):
+    """Elk knipsel wijst naar een bestand dat bestaat en heeft een bijschrift.
+
+    Een knipsel is een bewering ("zo staat het in de krant"), dus een kapotte link of
+    een leeg bijschrift is net zo'n gebrek als een feit zonder bron. Het pad wordt
+    opgelost ten opzichte van het markdown-bestand, precies zoals de website en de PDF
+    dat doen. Webadressen worden niet gecontroleerd.
+    """
+    problemen = []
+    mappen = [wortel / "personen", wortel / "boek" / "verhalen", wortel / "boek" / "hoofdstukken",
+              wortel / "tijdsbeeld"]
+    gebruikt = set()
+    for map_ in mappen:
+        if not map_.is_dir():
+            continue
+        for pad in sorted(map_.glob("*.md")):
+            if pad.name.startswith("_"):
+                continue
+            rel = pad.relative_to(wortel).as_posix()
+            for m in AFBEELDING.finditer(pad.read_text(encoding="utf-8")):
+                bijschrift, src = m.group(1).strip(), m.group(2)
+                if re.match(r"^[a-z][a-z0-9+.-]*:", src, re.I):
+                    continue
+                doel = (pad.parent / src).resolve()
+                try:
+                    gebruikt.add(doel.relative_to(wortel.resolve()).as_posix())
+                except ValueError:
+                    pass
+                if not doel.is_file():
+                    problemen.append(f"{rel}: knipsel '{src}' bestaat niet (gezocht als {doel})")
+                if not bijschrift:
+                    problemen.append(f"{rel}: knipsel '{src}' heeft geen bijschrift — noem bron en datum")
+    beeldmap = wortel / "boek" / "verhalen" / "beeld"
+    los = []
+    if beeldmap.is_dir():
+        for b in sorted(beeldmap.iterdir()):
+            if b.is_file() and b.name != ".gitkeep":
+                if b.relative_to(wortel).as_posix() not in gebruikt:
+                    los.append(b.name)
+    return problemen, los
 
 
 def bepaal_volgende(items, per_id, tb_stand):
@@ -175,6 +312,9 @@ def main():
     dossiers = {p.stem for p in PERSONEN.glob("*.md") if not p.stem.startswith("_")}
     problemen = []
 
+    # 0. dezelfde persoon twee keer op de werklijst
+    problemen.extend(dubbele_regels(items))
+
     # 1. afgevinkt zonder dossier
     for i in items:
         if i["af"] and i["id"] not in dossiers:
@@ -208,6 +348,9 @@ def main():
                     f"personen/{pad.stem}.md verwijst naar [[{doel}]], dat niet in de werklijst staat"
                 )
 
+    # 4b. ouder wél bij naam in de kerngegevens, maar geen wikilink in de frontmatter
+    problemen.extend(ouders_zonder_wikilink(items))
+
     # 5. documenten: mappen horen bij werklijst-ID's, elk bestand heeft een beschrijving
     documenten = WORTEL / "documenten"
     # Een akte kan meer dan één scan hebben (een spread over twee bladzijden). Die heten
@@ -239,6 +382,13 @@ def main():
     inbox = [b for b in (documenten / "inbox").glob("*") if b.name != ".gitkeep"]
     if inbox:
         print(f"Let op: {len(inbox)} bestand(en) in documenten/inbox/ wachten op verwerking.")
+
+    # 6. knipsels: elk beeld bestaat en heeft een bijschrift
+    knipsels, losse_beelden = knipsel_problemen()
+    problemen.extend(knipsels)
+    if losse_beelden:
+        print(f"Let op: {len(losse_beelden)} knipsel(s) in boek/verhalen/beeld/ worden nergens "
+              f"gebruikt: {', '.join(losse_beelden[:6])}{' …' if len(losse_beelden) > 6 else ''}")
 
     af = sum(1 for i in items if i["af"])
     totaal = len(items)

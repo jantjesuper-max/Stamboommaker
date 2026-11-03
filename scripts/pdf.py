@@ -31,6 +31,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import urllib.parse
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -261,8 +262,34 @@ def esc(tekst):
     return html.escape(str(tekst), quote=False)
 
 
+# Een knipsel of scan in de tekst: ![bijschrift](pad). Het bijschrift mag één niveau rechte
+# haken bevatten ("[...]" voor een weglating), net als in de website.
+AFBEELDING = re.compile(r"!\[((?:[^\[\]]|\[[^\]]*\])*)\]\(([^)\s]+)[^)]*\)")
+
+
+def beeldbron(src, ctx):
+    """Maakt van een markdown-beeldpad iets wat de headless browser kan openen.
+
+    De HTML wordt als file:// geopend vanuit pdf/<soort>/, dus een relatief pad als
+    `beeld/x.jpg` zou daar niets vinden. Het wordt opgelost ten opzichte van de map van
+    het markdown-bestand (ctx["basismap"]) en als absoluut file://-pad meegegeven.
+    Webadressen en paden die niet bestaan blijven zoals ze zijn.
+    """
+    if re.match(r"^[a-z][a-z0-9+.-]*:", src, re.I):
+        return src
+    basis = ctx.get("basismap")
+    if basis is None:
+        return src
+    pad = (Path(basis) / urllib.parse.unquote(src)).resolve()
+    return pad.as_uri() if pad.is_file() else src
+
+
+def img_html(alt, src, ctx):
+    return '<img src="%s" alt="%s">' % (html.escape(beeldbron(src, ctx)), html.escape(alt))
+
+
 def inline(tekst, ctx):
-    """Vet, cursief, code, links, wikilinks, voetnootverwijzingen, doorhalingen."""
+    """Vet, cursief, code, links, wikilinks, voetnootverwijzingen, doorhalingen, beelden."""
     codes = []
 
     def bewaar_code(m):
@@ -270,6 +297,14 @@ def inline(tekst, ctx):
         return "\x00c%d\x00" % (len(codes) - 1)
 
     tekst = re.sub(r"`([^`]+)`", bewaar_code, tekst)
+    # afbeeldingen vóór de links, anders wordt ![x](y) een uitroepteken met een link
+    beelden = []
+
+    def bewaar_beeld(m):
+        beelden.append(img_html(m.group(1), m.group(2), ctx))
+        return "\x00b%d\x00" % (len(beelden) - 1)
+
+    tekst = AFBEELDING.sub(bewaar_beeld, tekst)
     tekst = esc(tekst)
 
     def wikilink(m):
@@ -297,6 +332,7 @@ def inline(tekst, ctx):
     tekst = re.sub(r"&lt;br\s*/?&gt;", "<br>", tekst)
     tekst = re.sub(r"\x00c(\d+)\x00",
                    lambda m: "<code>%s</code>" % esc(codes[int(m.group(1))]), tekst)
+    tekst = re.sub(r"\x00b(\d+)\x00", lambda m: beelden[int(m.group(1))], tekst)
     return tekst
 
 
@@ -371,6 +407,14 @@ def markdown_naar_html(md, ctx):
         if m:
             n = len(m.group(1))
             uit.append("<h%d>%s</h%d>" % (n, inline(m.group(2), ctx), n))
+            i += 1
+            continue
+
+        # losse afbeelding op een eigen regel: een figuur met het bijschrift eronder
+        m = AFBEELDING.fullmatch(kaal)
+        if m:
+            uit.append('<figure class="beeld">%s<figcaption>%s</figcaption></figure>'
+                       % (img_html(m.group(1), m.group(2), ctx), inline(m.group(1), ctx)))
             i += 1
             continue
 
@@ -473,7 +517,8 @@ class Document:
         self.ident = pad.stem
         tekst = pad.read_text(encoding="utf-8")
         self.kop, romp = lees_frontmatter(tekst)
-        self.ctx = {"namen": namen, "noten": {}, "nootvolgorde": []}
+        self.ctx = {"namen": namen, "noten": {}, "nootvolgorde": [],
+                    "basismap": pad.parent}  # relatieve beeldpaden lossen hiertegen op
 
         # de eerste H1 uit de romp is de mooiste titel; die komt in de kopregel
         m = re.search(r"^#\s+(.+)$", romp, re.M)
@@ -636,6 +681,13 @@ blockquote {
   margin: 6pt 0 6pt 6pt; padding: 3pt 0 3pt 8pt;
   border-left: 2pt solid var(--rand); color: var(--inkt-zacht); font-style: italic;
 }
+
+/* knipsels, scans en andere afbeeldingen in de tekst */
+figure.beeld { margin: 8pt 0 10pt; break-inside: avoid; }
+figure.beeld img, p img { display: block; max-width: 100%; height: auto;
+  border: .5pt solid var(--rand-zacht); }
+figure.beeld figcaption { font-family: var(--sans); font-size: 7.8pt; line-height: 1.35;
+  color: var(--inkt-vaag); margin-top: 3pt; text-align: left; }
 
 /* kopkaart met de frontmatter */
 .kaart {
@@ -916,8 +968,11 @@ def maak_pdf(soort, ident, vernieuw=False):
     if not bron.is_file():
         raise FileNotFoundError(ident)
     pdf_pad = UITVOER / SOORTEN[soort]["uitmap"] / (ident + ".pdf")
-    if not vernieuw and pdf_pad.is_file() \
-            and pdf_pad.stat().st_mtime >= bron.stat().st_mtime:
+    # Ook een nieuwere versie van dit script maakt de cache ongeldig: anders blijft een
+    # PDF die vóór een reparatie van de renderer is gemaakt gewoon terugkomen zolang het
+    # markdown-bestand niet verandert.
+    nieuwste_bron = max(bron.stat().st_mtime, Path(__file__).stat().st_mtime)
+    if not vernieuw and pdf_pad.is_file() and pdf_pad.stat().st_mtime >= nieuwste_bron:
         return pdf_pad
     browser = zoek_browser()
     if browser is None:

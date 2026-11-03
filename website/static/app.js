@@ -476,7 +476,10 @@ function mdRender(bron, basisMap) {
       if (href) return tok('<a class="padlink" href="' + href + '"><code>' + c + "</code></a>");
       return tok("<code>" + c + "</code>");
     });
-    s = s.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (_, alt, src) => {
+    // Onderschriften van knipsels citeren de bron en bevatten soms een weglating "[...]" of een
+    // aanvulling "[zoon]"; sta daarom één niveau rechte haken binnen de alt-tekst toe. Zonder
+    // dit werd zo'n knipsel als platte tekst getoond.
+    s = s.replace(/!\[((?:[^\[\]]|\[[^\]]*\])*)\]\(([^)\s]+)\)/g, (_, alt, src) => {
       if (/^https?:/.test(src)) return tok('<img src="' + src + '" alt="' + alt + '">');
       return tok('<img src="' + bestandUrl(padNormaliseer(basisMap, decodeURIComponent(src))) + '" alt="' + alt + '" loading="lazy">');
     });

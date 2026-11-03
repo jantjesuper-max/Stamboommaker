@@ -125,13 +125,57 @@ minimaal deze ingangen af, voor zover regio en periode passen
   hertrouwd — de huwelijksakte noemde zíjn ouders.
 - Het **regionale archief** van de streek: AlleFriezen, AlleDrenten, Collectie Overijssel,
   Westfries Archief, Erfgoed Leiden, Zeeuwen Gezocht, Rijksarchief België, Archion
+- **Meet een muur voordat je hem opschrijft.** `py scripts/zoek_openarch.py varianten "<naam>"
+  --plaats <dorp>` probeert alle schrijfwijzen; `bronnen <dorp>` zegt welke registers de index
+  voor die plaats kent; `dekking "<gewone naam>" --plaats <dorp> --brontype "DTB Dopen"` laat
+  zien of het register de jaren dekt. Een nul op één spelling of in een register dat niet
+  ontsloten is, is geen meting.
+
+**4b-ter. Kranten — verplicht bij elke persoon, en de plek waar de verhalen liggen**
+
+Een akte geeft een datum; een krant geeft een avond in het dorpshuis, een ongeluk op het land,
+een trekhond te koop. **Doe bij elke voorouder minstens één krantenzoekopdracht**, ook in de
+zeventiende eeuw (dan op naam plus stad), en bij iedereen die na ongeveer 1840 leefde
+**meerdere**: naam + dorp, naam + beroep, de naam van de partner, en de spellingsvarianten. Zet
+elk commando in het onderzoekslog, ook bij nul. Kies de krantenbank naar de streek, niet alleen
+Delpher — het plaatselijke nieuws staat vaak juist **níet** in Delpher. De tabel *Kranten per
+streek* in `onderzoek/bronnengids.md` zegt welke bank bij welke streek hoort:
+
+- **Delpher** (landelijk): `py scripts/zoek_delpher.py zoek "<naam> AND <dorp>" --van .. --tot ..`
+  en `toon <id>` voor de OCR-tekst. **`AND` tussen élk woord**, anders wordt het een frase en
+  geeft het stilzwijgend nul; staat er *"N treffer(s) NIET doorzocht"*, verhoog `--grens`.
+- **Regionale krantenbanken** op courant.nu-software (Leiden, Alkmaar):
+  `py scripts/zoek_courant.py zoek "<naam> AND <dorp>" --bank leiden --van .. --tot ..`. De
+  treffer is een **pagina**, dus `A AND B` is breed en een frase tussen aanhalingstekens scherp.
+  Lees elke treffer na met `toon <url> --woord <naam>`; haal de pagina met `scan <url> --uit
+  test/tijdelijk/krant/<naam>.png`.
+- **Friesland**: `py scripts/zoek_dekrantvantoen.py zoek "<naam> <dorp>" --van .. --tot ..`
+  (Leeuwarder Courant vanaf 1752, met scans via `toon <id> --png <pad>`).
+- **Zeeland**: `py scripts/zoek_kbz.py zoek "<termen>" --van dd-mm-jjjj --tot dd-mm-jjjj` en
+  `scan <url> --uit <pad>`; geef altijd `--van` én `--tot`.
+
+**Komt een voorouder uit een streek die nog geen krantenbank in de bronnengids heeft, zoek die
+dan eerst op — vóór de eerste krantenzoekopdracht.** Kijk bij het regionale archief en op
+<https://www.hennekam.net/krantenarchieven-nederland/>; draait de bank op de courant.nu-software,
+voeg hem toe aan `BANKEN` in `scripts/zoek_courant.py` en controleer met een gewone naam dat er
+*"N resultaten gevonden"* terugkomt. Schrijf hem bij in de bronnengids, ook als hij alleen
+handmatig werkt. Bij een lange krantensweep (veel zoekopdrachten, veel OCR lezen) mag je het
+leeswerk aan een subagent geven, met de opdracht niets in het project te wijzigen en alles met
+URL en datum terug te melden; jij beoordeelt en verwerkt.
+
+**Een krantenvondst is een verhaal, geen bijzaak.** Elke vondst die je aan tafel zou vertellen
+gaat in dezelfde ronde naar `boek/verhalen/` (stap 7), met het citaat uit de krant én het
+knipsel erin, en in de Levensloop van het dossier. Een advertentie, een uitslag van de
+zangvereniging, een veldwachtersbericht: het zijn de enige plekken waar deze mensen iets
+zéggen of dóen in plaats van geboren worden en sterven.
+
 **4b-bis. Buiten het archief: waar de verhalen liggen**
 
 Aktes geven datums; deze bronnen geven leven. Loop ze langs zodra iemand een beroep, een
 verhuizing of een opvallend voorval heeft:
 
-- **Delpher** — kranten én gedigitaliseerde boeken en tijdschriften: overlijdensadvertenties,
-  ongelukken, faillissementen, veilingen, gemeenteberichten, stakingen
+- **Delpher** — naast kranten ook gedigitaliseerde boeken en tijdschriften (`--collectie` in
+  `zoek_delpher.py`): streekbeschrijvingen, jaarverslagen, adresboeken
 - **Streekhistorie**: regionale historische verenigingen, dorpswebsites, uitgegeven
   streekboeken — vraag de historische vereniging van de streek wat er is. Vaak schreef
   iemand al een boek over precies het dorp en het beroep van je voorouder
@@ -352,6 +396,14 @@ signalement uit een militie- of gevangenisregister, en de indexalinea uit `Sourc
 Is er niets letterlijks, dan komt er geen citaat: verzin er nooit een, en laat een akte nooit
 "oud" klinken omdat het mooi staat. Geen bron, geen citaat.
 
+**En het citaat komt ook als knipsel in het verhaal.** Gaat het om een krantenbericht, een
+advertentie of een sprekend stuk akte, knip het dan uit de scan met
+`py scripts/knipsel.py <scan> <x> <y> <breedte> <hoogte> <JJJJ-MM-DD-bron-onderwerp>` (de
+coördinaten lees je af met `lees_scan.py overzicht`) en zet het vlak bij het citaat als
+`![bron, datum: kern in de woorden van de bron](beeld/<naam>.jpg)`. Knip het bericht, niet de
+pagina; lees het eerst op de scan; en laat de bronvermelding staan. Volledig: `CLAUDE.md`,
+"Knipsels: laat de lezer de bron zien".
+
 **Als er genoeg staat voor een verhaal:** vraag eerst wat er al ligt voor dit deel —
 
 ```
@@ -370,9 +422,28 @@ schrijven. Een dossier met alleen datums levert geen boek op. Verwerk je een ver
 hoofdstuk, gooi het bestand dan niet weg maar zet `landing:` op het hoofdstuk en bouw de
 index opnieuw — zo blijft zichtbaar wat al een plek heeft en wat nog wacht.
 
+**7b. De pagina afmaken: levensloop centraal**
+
+Een dossier is pas een dossier als het leest als een pagina over een mens, en de website toont
+hem zo. Loop vóór het afvinken de opbouw van `personen/_TEMPLATE.md` langs (volledig:
+`CLAUDE.md`, "De dossierpagina: levensloop centraal"):
+
+- **Titel met ondertitel** die de kern van dit leven in de woorden van de bronnen geeft, en
+  een **vetgedrukte opening** die begint bij een moment uit een akte of krant, met het knipsel
+  van dat moment eronder en daarna het hele leven in vijf zinnen.
+- **Kerngegevens** die álle gevonden registers dragen (bevolkingsregister met huisnummer en
+  verhuisdata, notarieel, militie, kon schrijven), elk met permalink en status; een kinderrij
+  uit de registers als tabel *De kinderen*.
+- **Levensloop** in gedateerde episodes, in de stem van `boek/stijlgids.md`, met per episode
+  het citaat in de spelling van de bron en het knipsel ernaast. Dit is de grondstof voor het
+  boek; een Levensloop van twee regels is geen Levensloop. Wat de bronnen niet zeggen, zeg je
+  ook niet.
+- Is de identificatie ◐ of ?, dan een kopje **Waarom hij hier staat** met wat ervoor en wat
+  ertegen pleit.
+
 **8. Afvinken**
 
-Vink de regel in de werklijst af (`- [ ]` → `- [x]`) — maar alleen als aan **alle** zes
+Vink de regel in de werklijst af (`- [ ]` → `- [x]`) — maar alleen als aan **alle** acht
 voorwaarden is voldaan:
 
 1. het dossier bestaat en de frontmatter is volledig gevuld;
@@ -384,7 +455,12 @@ voorwaarden is voldaan:
    staan, maar dan is de persoon niet af en stuurt de route je terug;
 6. de **groot**-kandidaten van stap 6 zijn écht onderzocht (zoekactie in het
    onderzoekslog): elk gekoppeld, beargumenteerd afgemeld of als open vraag genoteerd.
-   Achtergrond-kandidaten hoeven niets.
+   Achtergrond-kandidaten hoeven niets;
+7. de **kranten** zijn doorzocht (stap 4b-ter), met de commando's in het onderzoekslog, en elke
+   vondst staat als verhaal mét knipsel in `boek/verhalen/` en in de Levensloop;
+8. de pagina heeft een **Levensloop** in episodes volgens stap 7b, en `py scripts/plaatsen.py`
+   geeft exitcode 0: elke plaats die dit dossier noemt (woonplaats, geboorteplaats,
+   sterfplaats) staat op de kaart, of is een gemeentenaam die bewust openblijft.
 
 Vermoedens die te dun zijn voor een feit horen niet bij de open vragen maar in de tabel
 **Zwakke sporen**, met de reden waarom ze zwak zijn.
@@ -393,9 +469,16 @@ Dan meten en het voortgangscijfer bijwerken:
 
 ```
 py test/controleer.py --fix
+py scripts/plaatsen.py
 ```
 
-Bij problemen: eerst oplossen, niet doorgaan.
+Bij problemen: eerst oplossen, niet doorgaan. `plaatsen.py` meldt welke plaatsen uit de
+dossiers nog niet in `website/static/plaatsen.json` staan (het Kaart-tabblad tekent alleen
+wat daarin staat). Vul ontbrekende plaatsen **met de hand en met streekcontrole** aan —
+nooit blind geocoderen: Nederland zit vol naamgenoot-dorpen (Rottum ligt in Friesland én
+Groningen, Echten in Friesland én Drenthe, Sloten in Friesland én bij Amsterdam), en het
+dossier zelf zegt in welke streek je moet zijn. Een gemeentenaam krijgt géén coördinaat;
+zoek het dorp. Volledig: CLAUDE.md, "Kaart: plaatsen.json bijhouden".
 
 **9. Vastleggen**
 
@@ -403,7 +486,7 @@ Controleer de repo-grens en commit alleen deze ronde:
 
 ```
 git rev-parse --show-toplevel        # moet de projectmap zijn, niet een map erboven
-git add personen documenten stamboom onderzoek boek
+git add personen documenten stamboom onderzoek boek website/static/plaatsen.json
 git commit -m "Dossier <naam> (<jaren>)"
 ```
 
@@ -456,8 +539,11 @@ Aan dit project wordt soms parallel gewerkt (bijvoorbeeld aan `website/`). Gebru
 **geen blinde `git add -A`** maar noem de paden die bij deze ronde horen:
 
 ```
-git add personen documenten stamboom onderzoek boek
+git add personen documenten stamboom onderzoek boek website/static/plaatsen.json
 git commit -m "Dossier <naam> (<jaren>)"
 ```
+
+(`plaatsen.json` hoort erbij: dat vult de ronde zelf aan via stap 8. De rest van
+`website/` blijft buiten de commit.)
 
 Zo blijft elke commit één afgeronde voorouder, en trek je niemand anders zijn halve werk mee.

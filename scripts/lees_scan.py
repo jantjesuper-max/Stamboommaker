@@ -11,13 +11,19 @@ De werkwijze in twee stappen:
     py scripts/lees_scan.py strook <scan> <x> <y> <b> <h> # lees de regels
 
 Het overzicht is grijswaarden op maximaal 1500 pixels: genoeg om te zien welke
-bladzijde en welk aktenummer je hebt, en meestal 100 tot 200 kB. De strook is
-een uitsnede op volle resolutie, met autocontrast, opgeschaald tot een vaste
-breedte -- dat is wat je nodig hebt om een naam of een datum écht te lezen.
+bladzijde en welk aktenummer je hebt. De strook is een uitsnede op volle
+resolutie, met autocontrast, opgeschaald tot een vaste breedte -- dat is wat je
+nodig hebt om een naam of een datum écht te lezen.
+
+Beide bestanden blijven gegarandeerd onder GRENS_KB (220 kB): het script meet na
+en verlaagt zo nodig de kwaliteit, en pas als laatste redmiddel de breedte. Dat
+is geen cosmetica maar de maatregel tegen ECONNRESET -- zie de opmerking bij die
+constante.
 
 Coördinaten geef je in het stelsel van de originele scan. Het overzicht print
 de schaalfactor, zodat je van wat je op het overzicht ziet naar de echte
-coördinaten kunt rekenen.
+coördinaten kunt rekenen. Dezelfde coördinaten gebruik je daarna voor
+scripts/knipsel.py, dat een uitsnede als knipsel voor een verhaal bewaart.
 """
 
 import argparse
@@ -32,6 +38,19 @@ OVERZICHT_MAX = 1500
 STROOK_BREEDTE = 2600
 KWALITEIT = 72
 
+# Harde bovengrens per uitvoerbestand. Eerder was de bestandsgrootte hier een gelukkig
+# toeval: kwaliteit 72 op 2600 pixels gaf "meestal" 150 tot 200 kB, maar bij een
+# dichtbeschreven strook of een grote uitsnede liep dat op. En juist een groot beeld is wat
+# achter een inspecterende proxy een `Connection dropped (ECONNRESET)` uitlokt. Een script
+# dat "meestal" klein blijft is dan niet goed genoeg: het faalt precies bij de moeilijk
+# leesbare bladzijden, waar je de uitsnede het hardst nodig hebt.
+#
+# Daarom wordt elk bestand nagemeten en zo nodig opnieuw opgeslagen met lagere kwaliteit,
+# en pas als laatste redmiddel smaller. Leesbaarheid gaat vóór scherpte: liever kwaliteit 45
+# dan een uitsnede die niet aankomt.
+GRENS_KB = 220
+KWALITEIT_MIN = 40
+
 
 def _uitvoerpad(naam):
     map_ = os.path.join(os.environ.get("TEMP", "."), "scanlees")
@@ -39,21 +58,48 @@ def _uitvoerpad(naam):
     return os.path.join(map_, naam)
 
 
+def _bewaar_onder_grens(beeld, pad, grens_kb=GRENS_KB):
+    """Sla op en blijf onder de grens; geeft (kB, kwaliteit, breedte) terug.
+
+    Eerst de kwaliteit omlaag in stappen, en pas als dat niet genoeg is de breedte.
+    Zo blijft de uitsnede leesbaar zolang het kan.
+    """
+    kwaliteit = KWALITEIT
+    while True:
+        beeld.save(pad, quality=kwaliteit, optimize=True)
+        kb = os.path.getsize(pad) / 1024
+        if kb <= grens_kb:
+            return kb, kwaliteit, beeld.size[0]
+        if kwaliteit > KWALITEIT_MIN:
+            kwaliteit = max(KWALITEIT_MIN, kwaliteit - 12)
+            continue
+        if beeld.size[0] > 900:
+            nieuw = int(beeld.size[0] * 0.8)
+            beeld = beeld.resize((nieuw, max(1, round(beeld.size[1] * nieuw / beeld.size[0]))), Image.LANCZOS)
+            kwaliteit = KWALITEIT
+            continue
+        return kb, kwaliteit, beeld.size[0]  # zo klein als het zinnig wordt
+
+
 def overzicht(argumenten):
+    Image.MAX_IMAGE_PIXELS = None  # krantenpagina's van 6000 x 9000 zijn geen bom maar een scan
     beeld = Image.open(argumenten.scan)
     breed, hoog = beeld.size
     klein = ImageOps.grayscale(beeld)
     klein.thumbnail((OVERZICHT_MAX, OVERZICHT_MAX), Image.LANCZOS)
     pad = _uitvoerpad(os.path.splitext(os.path.basename(argumenten.scan))[0] + "_overzicht.jpg")
-    klein.save(pad, quality=KWALITEIT, optimize=True)
-    factor = breed / klein.size[0]
+    kb, kwaliteit, breedte_uit = _bewaar_onder_grens(klein, pad)
+    factor = breed / breedte_uit
     print(f"origineel : {breed} x {hoog}")
-    print(f"overzicht : {klein.size[0]} x {klein.size[1]}  ({os.path.getsize(pad) / 1024:.0f} kB)")
+    print(f"overzicht : {breedte_uit} x {klein.size[1]}  ({kb:.0f} kB, kwaliteit {kwaliteit})")
     print(f"schaal    : vermenigvuldig wat je op het overzicht meet met {factor:.2f}")
+    if kb > GRENS_KB:
+        print(f"LET OP    : boven de grens van {GRENS_KB} kB -- lees dit bestand liever in stroken")
     print(pad)
 
 
 def strook(argumenten):
+    Image.MAX_IMAGE_PIXELS = None
     beeld = ImageOps.grayscale(Image.open(argumenten.scan))
     x, y, breed, hoog = argumenten.x, argumenten.y, argumenten.breedte, argumenten.hoogte
     uitsnede = beeld.crop((x, y, x + breed, y + hoog))
@@ -62,8 +108,11 @@ def strook(argumenten):
     uitsnede = uitsnede.resize((STROOK_BREEDTE, doelhoog), Image.LANCZOS)
     naam = f"{os.path.splitext(os.path.basename(argumenten.scan))[0]}_{x}_{y}.jpg"
     pad = _uitvoerpad(naam)
-    uitsnede.save(pad, quality=KWALITEIT, optimize=True)
-    print(f"strook    : {uitsnede.size[0]} x {uitsnede.size[1]}  ({os.path.getsize(pad) / 1024:.0f} kB)")
+    kb, kwaliteit, breedte_uit = _bewaar_onder_grens(uitsnede, pad)
+    print(f"strook    : {breedte_uit} x {uitsnede.size[1]}  ({kb:.0f} kB, kwaliteit {kwaliteit})")
+    if kwaliteit < KWALITEIT or breedte_uit < STROOK_BREEDTE:
+        print(f"LET OP    : teruggeschaald om onder {GRENS_KB} kB te blijven. "
+              "Is de tekst nu te vaag, neem dan een kleinere uitsnede in plaats van een lagere kwaliteit.")
     print(pad)
 
 

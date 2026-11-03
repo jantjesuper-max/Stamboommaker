@@ -158,6 +158,17 @@ def persoon_gegevens(pad):
         onzeker = bool(re.search(r"\bna\b", overleden.lower()))
         if onzeker:
             eind += 15  # "na JJJJ": ruim nemen, kandidaten zijn maar aanwijzingen
+        elif re.search(r"\bv(oo|óó)r\b", overleden.lower()):
+            # "vóór JJJJ" is een BOVENGRENS en geen sterfjaar. Wie dat jaartal als sterfjaar
+            # leest, verzint een leven: iemand geboren ca. 1725 met "overleden: ? vóór
+            # 09-01-1834" kreeg zo 109 jaar en drie kandidaten aangeboden waar hij 85, 105
+            # en 107 zou zijn geweest. Zulke kandidaten zijn geen zoekopdracht maar ruis, en
+            # het kost een ronde om ze beargumenteerd af te melden.
+            # Neem daarom de vroegste van twee grenzen: de genoemde bovengrens, of een
+            # gewoon mensenleven vanaf de geboorte. Blijft onzeker.
+            onzeker = True
+            if geb:
+                eind = min(eind, geb + 85)
     elif geb:
         eind, onzeker = geb + 85, True
     else:

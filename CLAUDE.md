@@ -50,8 +50,14 @@ gedeeld mag worden. Concreet:
 | `py test/test_gereedschap.py` | controleert de scripts zelf — draai dit na elke wijziging in `scripts/` |
 | `py scripts/zoek_openarch.py zoek "Naam"` | zoeken in Open Archieven (geen API-key nodig) |
 | `py scripts/zoek_openarch.py toon <id>` | bronvermelding, rollen, opmerkingenvelden en scan-URL's |
+| `py scripts/zoek_openarch.py varianten \| bronnen \| dekking` | schrijfwijzen proberen, registers per plaats tellen, index per jaar meten |
 | `py scripts/download_scans.py [persoon-id]` | scans binnenhalen op volledige resolutie |
 | `py scripts/lees_scan.py overzicht \| strook` | een scan werkelijk kunnen lezen (uitsnede + contrast) |
+| `py scripts/knipsel.py <scan> <x> <y> <b> <h> <naam>` | een bericht of stuk akte uitknippen voor verhaal en levensloop |
+| `py scripts/zoek_delpher.py zoek "A AND B"` | Delpher (landelijke kranten); `toon` geeft de OCR-tekst |
+| `py scripts/zoek_courant.py zoek "A AND B" --bank leiden` | regionale krantenbanken op courant.nu-software; `scan` haalt de pagina |
+| `py scripts/zoek_dekrantvantoen.py zoek "…"` | Leeuwarder Courant vanaf 1752 (De Krant van Toen), met scans |
+| `py scripts/zoek_kbz.py zoek "…" --van --tot` | Krantenbank Zeeland, met scans |
 | `py scripts/tijdsbeeld.py kandidaten <id>` | welke geschiedenis raakte dit leven? |
 | `py scripts/verhalen.py index \| lijst \| controleer` | de verhalenverzameling beheren |
 | `py scripts/bouw_boek.py` | hoofdstukken → `boek/manuscript.md` (met pandoc ook Word) |
@@ -118,6 +124,32 @@ past binnen de controle.
 Eén bestand per voorouder in `personen/`, opgezet volgens `personen/_TEMPLATE.md`.
 Relaties als wikilinks: `[[bakker-jan-hendriks-1813]]`. Elk feit in de kerngegevens-tabel
 krijgt een bron en een status.
+
+### De dossierpagina: levensloop centraal
+Een dossier is geen formulier maar een pagina over een mens, en de website toont hem zo. De
+opbouw uit het sjabloon, van boven naar beneden:
+
+1. **Titel met ondertitel**: `# Naam (1866–1908): de knecht die een ander zijn dienstplicht
+   afkocht`. De ondertitel is de kern van dit leven in de woorden van de bronnen, en komt er
+   pas als het dossier die kent.
+2. **De opening is een moment**, vetgedrukt: één alinea die begint bij een akte, een krant of
+   een handtekening. Daaronder het **knipsel** van dat moment, en dan één alinea met het hele
+   leven in vijf zinnen. Is de identificatie ◐ of ?, dan staat dat hier met ⚠.
+3. **Kerngegevens**: elk feit één regel, met vetgedrukt wat de bron bewijst, de permalink of
+   de link naar het beschrijvingsbestand, en de status. Niet alleen geboorte, huwelijk en dood:
+   ook elk bevolkingsregister (huisnummer, vestiging, vertrek), elke notariële akte, elke
+   militie-inschrijving, en of iemand kon schrijven. Een kinderrij uit de registers krijgt een
+   eigen tabel *De kinderen*, zonder dossiers (zie `boek/zijtakken.md`).
+4. **Levensloop** in gedateerde episodes (`### Knecht, 1882-1889`, `### Naar Oudshoorn,
+   1905-1908`), in de stem van `boek/stijlgids.md`. Per episode wat de akte zegt, het citaat
+   in de spelling van de bron, en het knipsel vlak bij het citaat. Streekhistorie krijgt een
+   voetnoot met URL en raadpleegdatum. Een leeg tijdvak krijgt geen kopje.
+5. Daarna Tijdsbeeld, Documenten, Open vragen (dicht, met de commando's), Zwakke sporen en het
+   Onderzoekslog.
+
+**Herzie je een bestaande pagina** (`/herzie`), dan blijven oude metingen in het log staan en
+krijgt een gewijzigde lezing een ⚠-zin die zegt wat er eerder stond en waarom het nu anders
+is. Een pagina wordt niet mooier door iets weg te laten.
 
 ### Documenten downloaden + beschrijvingsbestand
 Vind je online een akte of scan: **download het bestand** naar `documenten/<persoon-id>/`
@@ -193,6 +225,14 @@ synchroon lopen en rekent uit wie er aan de beurt is volgens de voorouderroute:
 3. **opzij** — bij een muur de diepste nog open tak; jongste generaties als terugval.
 
 `--fix` werkt het voortgangscijfer bij.
+
+**Een gevonden ouder krijgt altijd drie dingen**, en niet één of twee: een **werklijstregel**
+(generatie = die van het kind + 1), een **`vader:`/`moeder:`-wikilink** in het dossier van het
+kind, en een **node in `stamboom/overzicht.md`**. Dit gaat anders stilletjes mis: een vader
+staat wél in de kerngegevens van zijn kind maar nergens anders, en de route stuurt er nooit
+iemand heen. `controleer.py` meldt dat sindsdien (*veld 'vader:' is leeg terwijl de
+kerngegevens '…' noemen*). Geldt ook voor een ouder die alleen uit een patroniem of een
+vernoeming bestaat; die krijgt dan een regel met `· overgeslagen: <reden>`.
 
 **De skill werkt ronde na ronde door.** Eén voorouder per commit, maar na die commit meteen
 verder met de volgende, zonder tussenvraag of tussenrapportage. Stoppen gebeurt alleen bij een
@@ -326,7 +366,14 @@ py scripts/zoek_openarch.py toon frl:22b09696-...        # bronvermelding + scan
 - **Geldige gebeurtenistypen (`--type`).** Verzin hier niets: een onbekende waarde geeft
   **stilzwijgend nul treffers** en dat lijkt op een muur. Geldig zijn: `Geboorte · Doop ·
   Ondertrouw · Trouwen · Huwelijk · Overlijden · Begrafenis · Registratie · Inschrijving ·
-  Notariële inschrijving`. Het script waarschuwt bij een onbekend type.
+  Notariële inschrijving`. Het script waarschuwt bij een onbekend type. ⚠ De API wil voor
+  een begrafenis `Begraven`, terwijl ze zelf `Begrafenis` terúggeeft in de records; het
+  script vertaalt dat, zodat `--type Begrafenis` het juiste antwoord geeft.
+- **Een onbekende archiefcode (`--archief`) geeft óók een stille nul.** Drenthe is `dar`,
+  niet `dra`; Overijssel is `hco`. Het script kent een lijst (`ARCHIEFCODES`) en waarschuwt
+  bij een code die er niet in staat, maar die lijst is al negen keer te kort gebleken: een
+  code die werkt en toch gemeld wordt, zet je erbij, gemeten met `name=Jansen` als ijkpunt.
+  En `--archief` is een **versmalling**, geen verfijning: draai een naam altijd eerst breed.
 - Vóór 1811 zijn alleen **Doop, Ondertrouw, Trouwen en Begrafenis** bruikbaar;
   Geboorte/Huwelijk/Overlijden bestaan pas met de burgerlijke stand. **Begrafenis** (DTB
   Begraven) is de enige ingang op een sterfgeval vóór 1811 en wordt gemakkelijk vergeten.
@@ -349,6 +396,25 @@ py scripts/zoek_openarch.py toon frl:22b09696-...        # bronvermelding + scan
   spelling van het archief: dat is de grondstof voor een citaat.
 - Bij een huwelijk na 1811: kijk of er **huwelijksbijlagen** zijn. Daar zitten vaak
   geboorteaktes van de ouders in — de goedkoopste manier om een generatie terug te komen.
+
+### Vier commando's die een muur meten in plaats van vermoeden
+
+- **`varianten "Baukjen Wiebes" --plaats Sloten`** — probeert dezelfde naam in alle gemeten
+  schrijfwijzen (ie/y/ij, t/d, k/c, mb/mm, dubbele medeklinkers) en telt per schrijfwijze de
+  treffers; met `--plaats` legt het ook de werkelijke familienamenlijst van dat dorp ernaast.
+  *Baukjen Wiebes* gaf zeven treffers en geen huwelijk; *Baukjen Wybes* gaf het huwelijk. Een
+  nul op één spelling is geen meting, en dit commando maakt er een van.
+- **`bronnen <plaats>`** — welke registers kent de index eigenlijk voor deze plaats, met
+  aantallen? Zo wordt "ik kan hun dopen niet vinden" een meting (er is geen rooms doopboek
+  ontsloten) in plaats van een vermoeden, en verandert de vervolgstap van "nog eens zoeken" in
+  "naar de studiezaal". ⚠ De getallen rusten op een monster; toets ze met `dekking`.
+- **`dekking "Jan" --plaats <dorp> --brontype "DTB Dopen" --van 1550 --tot 1620`** — telt een
+  veelvoorkomende naam per jaar en tekent een staafgrafiek. Een aaneengesloten staart van
+  nullen is een openbaarheidstermijn of het einde van de index; een gat middenin is een
+  ontbrekend registerdeel, geen familiefeit. Toets één los jaar altijd met `zoek`.
+- **`--van`/`--tot` gaan serverzijdig mee** (als periode achter de naam), dus een
+  periodezoekopdracht is compleet en niet begrensd op 600; het script meldt het als het toch
+  moet terugvallen op filteren na het ophalen.
 
 ### De velden die het script eerst weggooide
 
@@ -534,6 +600,56 @@ streekhistorie is en geen akte. Volledig: `onderzoek/bronnengids.md`.
 regio, met één regel over waar hij goed voor is en wat je er concreet in vond. Datzelfde geldt
 voor een register dat blijkt te **ontbreken** of achter een betaalmuur zit.
 
+### Kranten: verplicht bij elke voorouder
+Een akte geeft een datum; een krant geeft een avond in het dorpshuis, een ongeluk op het land,
+een trekhond te koop. **Doe bij elke voorouder minstens één krantenzoekopdracht**, ook in de
+zeventiende eeuw (dan op naam plus stad), en bij iedereen die na ongeveer 1840 leefde
+meerdere: naam + dorp, naam + beroep, de naam van de partner, de spellingsvarianten. Zet elk
+commando in het onderzoekslog, ook bij nul. Kies de krantenbank naar de streek, want het
+plaatselijke nieuws staat vaak juist **níet** in Delpher.
+
+**Delpher** (`py scripts/zoek_delpher.py`): de website is JavaScript en geeft 403, maar de KB
+heeft een open SRU-endpoint (`jsru.kb.nl/sru/sru`, geen sleutel) dat per treffer datum, krant,
+pagina en kop geeft; `toon` haalt de volledige OCR-tekst. Vier lessen:
+
+- **Zet tussen élk woord een `AND`.** Losse woorden worden als frase gezocht en geven
+  stilzwijgend nul: `zoek "Jan de Vries Oudshoorn"` → 0, `zoek "Vries AND Oudshoorn"` →
+  duizenden. Toets een onverwachte nul altijd eerst met een ijkpunt van één woord. Dit is
+  dezelfde familie fouten als `--type Begrafenis` bij Open Archieven: een parameter die
+  rechtstreeks naar de API gaat kan nul geven zonder te klagen.
+- **Geen werkend datumfilter.** `--van`/`--tot`/`--krant`/`--plaats` filteren ná het ophalen;
+  staat er *"N treffer(s) NIET doorzocht"*, verhoog `--grens`.
+- **Bij een OCR-fout: lees een andere krant, niet een andere zoekopdracht.** Een landelijke
+  bekendmaking staat in tientallen kranten, elk met een eigen OCR.
+- **Een getal in de OCR is een lezing.** Controleer het op de paginascan: de ALTO van de pagina
+  (`https://resolver.kb.nl/resolve?urn=<krant-id>:p002:alto`) geeft positie en betrouwbaarheid
+  per woord, `...:p002:image` de pagina zelf. Een *63* bleek een *68*, een *187* een *167*.
+- **Zoek ook op werkgever en beroep**, niet alleen op de naam: een eremedaille, een
+  faillissement en een staking staan onder de naam van de firma.
+
+**De regionale krantenbanken** (`py scripts/zoek_courant.py`, `zoek_dekrantvantoen.py`,
+`zoek_kbz.py`): de courant.nu-software (Leiden, Alkmaar) weigert alleen een aanroep zonder
+browser-User-Agent, en dat lijkt op "niet te doorzoeken". Met UA geeft de zoekpagina gewoon
+treffers. Bij courant.nu is de treffer een **pagina** (`A AND B` is breed; een frase tussen
+aanhalingstekens is scherp); `toon <url> --woord <naam>` geeft de OCR rond de naam, `scan`
+haalt de pagina als jpg of png. **Lees een advertentie altijd van de scan**: een
+familieadvertentie noemt de kinderen mét hun echtgenoten, en dat is precies de verbinding die
+een index na 1902 niet meer laat zien.
+
+**Nieuwe streek, nieuwe krantenbank.** Komt een voorouder uit een streek zonder bekende
+krantenbank, zoek die dan eerst op (de lijst op <https://www.hennekam.net/krantenarchieven-nederland/>
+en het regionale archief). Draait hij op de courant.nu-software, zet hem dan in `BANKEN` van
+`scripts/zoek_courant.py`; schrijf hem in elk geval bij in `onderzoek/bronnengids.md`, ook
+als hij alleen handmatig werkt.
+
+### Een beroepsrol in een akte is geen verwantschap
+Onder een overlijdensakte kan iemand met dezelfde familienaam staan die *begrafenisondernemer*
+is: de **aanspreker** van het dorp, die in die hoedanigheid onder de aktes van willekeurige
+dorpelingen staat. Hetzelfde geldt voor de weesvader, de gemeentewerkman die drie keer een
+kindersterfgeval aangaf, de geneesheer en de buurman-getuige. Wie een naam in een akte
+tegenkomt, kijkt eerst naar het **beroep** dat erachter staat; dat is een functie, geen familie.
+En omgekeerd maakt dezelfde naam bij een firma en bij een werkman hen niet dezelfde man.
+
 ## "Pak open vraag X op"
 
 1. Lees de vraag in `onderzoek/open-vragen.md` en de betrokken dossiers.
@@ -548,9 +664,9 @@ voor een register dat blijkt te **ontbreken** of achter een betaalmuur zit.
 Komt er bij het verwerken of zoeken een bijzonder verhaal boven (een migratie, een drama, een
 opvallend beroep, een krantenbericht, een raadsel dat zich oplost):
 
-1. Eerst het dossier bijwerken (feiten + bronnen).
+1. Eerst het dossier bijwerken (feiten + bronnen), met de vondst in de Levensloop.
 2. Dan een bestand in `boek/verhalen/` volgens `_TEMPLATE.md` — **altijd**, ook als er die
-   ronde geen hoofdstuk komt. Zo verdwijnt geen vondst.
+   ronde geen hoofdstuk komt. Zo verdwijnt geen vondst. Met het citaat én het knipsel.
 3. Is er genoeg: een hoofdstuk in `boek/hoofdstukken/NN-korte-titel.md`, in de stem van
    `boek/stijlgids.md`, met een voetnoot bij elke bewering uit een bron.
 4. Hoofdstukkentabel in `boek/opzet.md` bijwerken en de eigenaar erop wijzen dat er iets te
@@ -571,6 +687,43 @@ kopje `## Citaatwaardig` in het beschrijvingsbestand. Dan vindt een latere schri
 materiaal in één keer terug met `grep -rn "Citaatwaardig" documenten/`, in plaats van dertig
 transcripties opnieuw door te lezen. Geen letterlijke passage gevonden, dan geen citaat:
 verzin er nooit een, en laat een akte nooit "oud" klinken omdat het mooi staat.
+
+### Knipsels: laat de lezer de bron zien
+Een krantenbericht, advertentie of stuk akte dat in een verhaal of in de levensloop van een
+dossier geciteerd wordt, komt er óók als **beeld** in: de lezer ziet de echte kolom, het
+lettertype en de handtekening, en niet alleen onze overschrijving. De website en de
+PDF-uitdraai tonen het als figuur met onderschrift.
+
+**Hoe:**
+
+1. Haal de paginascan op: `zoek_courant.py scan <url> --uit test/tijdelijk/krant/<naam>.png`
+   (Leiden, Alkmaar), `zoek_dekrantvantoen.py toon <id> --png <pad>` (Friesland),
+   `zoek_kbz.py scan <url> --uit <pad>` (Zeeland), Delpher via de ALTO-en-beeldroute hierboven,
+   of een akte uit `documenten/<id>/`.
+2. Zoek de plek op met `py scripts/lees_scan.py overzicht <scan>` en reken om met de
+   schaalfactor; lees de passage met `strook`.
+3. Knip met `py scripts/knipsel.py <scan> <x> <y> <breedte> <hoogte> <JJJJ-MM-DD-bron-onderwerp>`.
+   Het script schrijft naar `boek/verhalen/beeld/`, grijs met autocontrast en hooguit 1400
+   pixels breed (`--kleur` voor een foto, `--vergroot 2` voor een scan in lage resolutie).
+4. Zet het vlak bij het citaat. In een verhaal: `![Leidsche Courant, 8 maart 1921: "een flinke
+   Trekhond … bij A. Jansen"](beeld/1921-03-08-...jpg)`; in een dossier hetzelfde met
+   `../boek/verhalen/beeld/`. Het onderschrift noemt **bron en datum** en de kern in de
+   woorden van de bron; het mag `[...]` bevatten.
+
+**Drie regels:**
+
+- **Het knipsel vervangt de bronvermelding niet**: de voetnoot of de regel `**Bron:**` blijft,
+  met krant, datum, pagina en URL.
+- **Knip precies het bericht en niet de pagina.** Een halve kolom is leesbaar; een hele pagina
+  op 1400 pixels niet. Een handtekening of een huisnummer mag een knipsel van drie regels zijn.
+- **Geen knipsel zonder gelezen bron.** Lees het bericht eerst op de scan met
+  `lees_scan.py strook`; de OCR kan het mis hebben, en het knipsel laat dan zien wat er echt
+  staat.
+
+`py test/controleer.py` meldt een knipsel waarvan het bestand ontbreekt of het onderschrift
+leeg is, en noemt beelden in `boek/verhalen/beeld/` die nergens gebruikt worden. ⚠ **Beeld
+van anderen** (een museumfoto, een kaart, een persfoto) mag alleen met een vrije licentie, en
+dan staan de licentie en de bron-URL in de voetnoot.
 
 ## Tijdsbeeld: geschiedenis die het leven raakte
 
@@ -618,6 +771,19 @@ horen ze in het dossier én in het boek. Het systeem:
 `stamboom/overzicht.md` is de leesbare samenvatting; de dossiers zijn de waarheid. Na elke
 dossierwijziging die namen/datums/statussen raakt: overzicht bijwerken.
 
+## Kaart: plaatsen.json bijhouden
+
+Het Kaart-tabblad van de website tekent alleen plaatsen die in
+`website/static/plaatsen.json` staan (coördinaten per plaatsnaam, plus aliassen voor oude
+of samengestelde namen). Komt er bij een dossier een nieuwe plaats bij, draai dan
+`py scripts/plaatsen.py`: dat meldt welke plaatsnamen uit de dossiers nog geen coördinaat
+hebben en eindigt met code 1 zolang er een woonplaats ontbreekt. Vul ze **met de hand en
+met streekcontrole** aan — nooit blind geocoderen, want Nederland zit vol
+naamgenoot-dorpen (Rottum ligt in Friesland én Groningen, Echten in Friesland én Drenthe,
+Sloten in Friesland én bij Amsterdam) en het dossier zelf zegt in welke streek je moet
+zijn. Een gemeentenaam krijgt géén coördinaat: zoek het dorp, of laat het veld staan. Een
+verkeerde stip is een stille onwaarheid; de gouden regel geldt ook hier.
+
 ## Praktisch
 
 - Blijf binnen deze projectmap. Tijdelijke bestanden in `test/tijdelijk/` (staat in
@@ -629,5 +795,10 @@ dossierwijziging die namen/datums/statussen raakt: overzicht bijwerken.
   deze map (`git init`) en werk daarbinnen.
 - Noem bij committen de paden expliciet in plaats van `git add -A`.
 - Python 3.10 of hoger. Op Windows heet het commando meestal `py`, elders `python3`. De scripts
-  gebruiken alleen de standaardbibliotheek, met één uitzondering: `lees_scan.py` heeft
-  **Pillow** nodig (`py -m pip install pillow`).
+  gebruiken alleen de standaardbibliotheek, met twee uitzonderingen: `lees_scan.py`,
+  `knipsel.py` en het comprimeren in `download_scans.py` hebben **Pillow** nodig
+  (`py -m pip install pillow`), en de krantenscans van `zoek_courant.py scan` en
+  `zoek_dekrantvantoen.py` komen als pdf en hebben **PyMuPDF** nodig om er een beeld van te
+  maken (`py -m pip install pymupdf`).
+- Tijdelijke krantenpagina's en uitsnedes horen in `test/tijdelijk/krant/`; alleen het knipsel
+  komt in `boek/verhalen/beeld/`.

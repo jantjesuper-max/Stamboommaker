@@ -24,7 +24,17 @@ wat er staat. Notariële aktes leveren hier het meeste op. Kijk in
 
 > De notaris zegt het zo, in de spelling van 1812: […]
 
-Geen letterlijke passage gevonden? Dan geen citaat. Verzin er nooit een. Zie
+![Bron, datum: de kern in de woorden van de bron](beeld/JJJJ-MM-DD-bron-onderwerp.jpg)
+
+En laat de lezer de bron zíen: het krantenbericht, de advertentie of het stuk akte dat je
+citeert komt er als knipsel bij, vlak onder het citaat, gemaakt met
+`py scripts/knipsel.py <scan> <x> <y> <breedte> <hoogte> <JJJJ-MM-DD-bron-onderwerp>`. Het
+onderschrift noemt bron en datum en de kern in de woorden van de bron. Knip precies het
+bericht, niet de pagina. Zie CLAUDE.md, "Knipsels: laat de lezer de bron zien".
+
+Geen letterlijke passage gevonden? Dan geen citaat en geen knipsel. Verzin er nooit een. Zie
 `boek/stijlgids.md`, "Citeer de bron letterlijk".
 
-**Bron:** volledige bronvermelding of dossierverwijzing. Zonder bron geen verhaal.
+**Bron:** volledige bronvermelding of dossierverwijzing — krant, datum, pagina en URL, of
+archief, toegang, inventarisnummer, akte en permalink. Het knipsel vervangt dit niet. Zonder
+bron geen verhaal.
